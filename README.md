@@ -1,5 +1,7 @@
 This project portfolio covers a diverse range of data analytics topics, each focusing on a different event or domain. Here's a summary of each project:
 
+(The Rmd contains the projoct code, the html and pdf are the outputs.)
+
 ### 1. 2011 Masters Golf Tournament Project
 - Objective: Analyze the performance of golfers in the 2011 Masters Golf Tournament.
 - Approach: Visualized the summary of the tournament, individual golfer performance, and identified the overall winner (Charl Schwartzel) using R.
