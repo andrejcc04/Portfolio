@@ -16,7 +16,12 @@ This project portfolio covers a diverse range of data analytics topics, each foc
 - Objective: Investigate the relationship between a country's economic stability, Olympic performance, and the impact of hosting the Olympics.
 - Approach: Analyzed datasets spanning the history of the Olympics, filtering and visualizing data to draw insights.
 - Techniques: Data manipulation, correlation analysis, and visualization using ggplot2.
+
+### 4. XLK Stock Price Prediction with Linear Regression
+Objective: Predict the future stock prices of XLK using machine learning techniques.
+Approach: Gathered historical stock data, split it into training and testing sets, trained a linear regression model, and evaluated its performance.
+Techniques: Data preprocessing, model training with linear regression, evaluation using Root Mean Square Error, and visualization using ggplot2.
   
-### 4. Future Projects
-- Next Steps: Planning to analyze the passing networks of the 2003-2004 Arsenal FC soccer team using Graph Theory concepts and techniques. Additionally, preparing for a machine learning project.
-- Approach: Likely to involve network analysis and machine learning algorithms.
+### 5. Future Projects
+- Next Steps: Planning to analyze the passing networks of the 2003-2004 Arsenal FC soccer team using Graph Theory concepts and techniques.
+- Approach: Likely to involve network analysis and graph theory.
