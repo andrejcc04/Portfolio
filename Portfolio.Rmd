@@ -2,12 +2,76 @@
 title: "My Portfolio"
 author: "Andre Contreras"
 date: "2023-2024"
-output: html_document
+output: 
+  prettydoc::html_pretty:
+    theme: tactile
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+# General
+library(ggplot2) # used to plot
+library(dplyr) # Used to manipulate, clean, filter data
+
+# For ML
+library(caret) # Common for Machine Learning Techniques
+library(readr) # Used to import dataset into R
+library(tidyverse)
+
+# For NFL:
+library(readxl) # Used to read excel files imported into R
+library(ggrepel) # Used for plot labeling
+
+# For Olympics:
+library(gapminder)
+library(countrycode)
 ```
+
+# Linear Regression Machine Learning Model on XLK Stock
+
+In the code below, I successfully train a Machine Learning model by gathering and manipulating the relevant data, splitting it into two sets (train & test), training a linear regression model, and testing it on the data set aside for testing. The resulting model displays a Root Mean Square Error of only 0.69, meaning that on average, my predictions are off by $0.69. I also included a regression line to show that on average, the stock price has gone up in the past year as well as a perfect fit line in the other plot.
+
+```{r, message=FALSE, warning=FALSE, fig.width=12}
+# 1. Read the CSV files into data frames
+data <- read_csv("XLK dataset.csv")
+
+data$Date <- as.Date(data$Date, format("%m/%d/%Y"))
+data$Date <- as.numeric(data$Date)
+
+# 2. Split the dataset into training and testing subsets
+training_data <- data[1:5884, ]
+testing_data <- data[5885:6134, ]
+
+# Train Model using linear regression model ('.' indicates all other variables will be used as predictors)
+model <- lm(Close ~ ., data = training_data)
+
+predictions <- predict(model, newdata = testing_data)
+
+# Evaluate performance using Root Mean Square Error
+rmse <- sqrt(mean((testing_data$Close - predictions)^2))
+
+# Plot
+ggplot(testing_data, aes(Date-19500, Close)) +
+  geom_point(aes(col = "Actual Price")) +  # Testing Data points (Actual price values)
+  geom_line(aes(y = predictions, col = "Predictions")) +  # Add a line for model predictions
+  geom_smooth(method = "lm", aes(col = "Regression Line"), se = FALSE) + # Regression Line
+  labs(x = "Time (Days in which Stock Market is Active)", y = "Stock Price", title = "XLK Stock Linear Regression Model Predictions", subtitle = "(In the last 365 Days)") +
+  geom_text(aes(label = paste("Root Mean Square Error =", round(rmse, 4)), x = Inf, y = Inf), hjust = 1, vjust = 1, color = "black") + # RMSE Text
+  scale_color_manual(name = "Legend", values = c("black", "blue", "yellow"))
+
+
+  
+plot(testing_data$Close, predictions, 
+     xlab = "Observed", ylab = "Predicted", 
+     main = "Observed vs. Predicted Values",
+     col = "black")
+# Red "Perfect" Line
+abline(0, 1, col = "red")
+```
+
+
+# ______________________________________________________________________________
 
 # 2011 Masters Golf Tournament Project
 
@@ -15,20 +79,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, include=FALSE}
 # For Golf:
-library(tidyverse)
 load(url(
   "https://www.stat.osu.edu/~vqv/4194/data/masters2011-untidy.rda"
 ))
-
-# For NFL:
-library(readxl)
-library(ggplot2)
-library(ggrepel)
-
-# For Olympics:
-library(gapminder)
-library(countrycode)
-library(dplyr)
 ```
 
 ```{r, fig.width=20, fig.height=12, warning=FALSE, message=FALSE}
@@ -223,7 +276,7 @@ generate_country_medals_plot <- function(country_code, country_name, summer_host
 ```
 
 
-```{r, comment="", echo=FALSE, results='hide'}
+```{r, comment="", echo=FALSE, results='hide', fig.height=3, fig.width=5}
 usa_plots <- generate_country_medals_plot("USA", "United States", c(1904, 1932, 1984, 1996), c(1932, 1960, 1980, 2002))
 usa_plots
 
@@ -312,6 +365,4 @@ hist(new$Distribution_difference, xlab = "Difference between Medals (Host Season
 
 # ______________________________________________________________________________
 
-#### I am also currently in the process of completing my fourth project - Analyzing the passing networks of the undefeated 2003-2004 Arsenal FC soccer team to use Graph Theory concepts and techniques in hopes of optimizing strategies that will lead to better results and more wins in present day soccer.
-
-#### I am also planning on undertaking a Machine Learning Project later this summer!
+#### I am also currently in the process of completing my fifth project - Analyzing the passing networks of the undefeated 2003-2004 Arsenal FC soccer team to use Graph Theory concepts and techniques in hopes of optimizing strategies that will lead to better results and more wins in present day soccer.
