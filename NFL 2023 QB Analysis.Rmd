@@ -1,0 +1,47 @@
+---
+title: "NFL 2023 QB Analysis"
+author: "Andre Contreras"
+date: "2023-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(ggrepel)
+```
+
+# NFL 2023 QB Performance Project
+
+
+## Overall QB Performance:
+
+```{r, fig.width=12, warning=FALSE, message=FALSE}
+qbdata <- read_excel("C:\\Users\\ajcon\\Downloads\\Portfolio\\qbdata.xlsx")
+
+mvp <- qbdata %>% 
+  top_n(1, qbdata$Grade*qbdata$Efficiency)
+
+ggplot(qbdata, aes(x = Efficiency, y = Grade, col = QB)) +
+  geom_point() +
+  geom_label_repel(data = mvp, aes(label = QB), nudge_x = -0.001, nudge_y = -0.05, segment.color = "black", segment.size = 0.5) +
+  labs(x = "Weighted Efficiency Scale", y = "Grading Scale", title = "Overall QB Performance 2023 NFL Season") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+```
+
+
+## QB Performance by Team
+
+```{r, fig.width=20, fig.height=15}
+ggplot(qbdata, aes(x = Efficiency, y = Grade)) +
+  geom_point() +
+  geom_text(aes(label = QB), nudge_x = 0, nudge_y = -0.05) +
+  facet_wrap(. ~ Team) +
+  labs(x = "Efficiency", y = "Grade", title = "Quarterback Performance by Team")
+```
+
