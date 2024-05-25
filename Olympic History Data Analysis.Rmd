@@ -1,0 +1,217 @@
+---
+title: "Olympic History Data Analysis"
+author: "Andre Contreras"
+date: "2024-04-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Olympics Project
+
+Does the economical stability of a country affect the number of athletes it sends to the olympics and the number of medals it wins?
+
+Does hosting the olympics correlate to winning more medals that year?
+
+### Part I
+
+Below are the results I found for the first question, along with the code I wrote to filter and manipulate the data so I can visualize it in a more effective manner.
+
+```{r, message=FALSE}
+athlete_events <- read_csv(
+   file = 'athlete_events.csv',
+   col_types = cols(ID = 'i', Age = 'i', Height = 'i', Year = 'i')
+)
+
+nearest_year <- function(olympics_year) {
+  gapminder_year <- seq(1952, 2007, by = 5)
+  nearest_year <- gapminder_year[which.min(abs(olympics_year - gapminder_year))]
+  return(nearest_year)
+}
+
+olympics_data <-
+  athlete_events %>%
+  filter(!is.na(Medal)) %>%
+  count(Games, Event, NOC, Medal, Team, Year, Name) %>%
+  mutate(year = nearest_year(Year))
+
+country_money <- gapminder %>%
+  group_by(country) %>%
+  select(country, year, gdpPercap)
+
+
+athletes_by_country_year <- olympics_data %>%
+  group_by(Team, Year) %>%
+  summarise(Total_Athletes = n_distinct(Name), .groups = 'drop')
+
+medals_by_country_year <- olympics_data %>%
+  group_by(Team, Year) %>%
+  summarise(Total_Medals = n_distinct(Medal), .groups = 'drop')
+
+joined_data_athletes <- inner_join(athletes_by_country_year, country_money, by = c("Year" = "year", "Team" = "country")) %>%
+  filter(!is.na(gdpPercap))
+
+joined_data_medals <- inner_join(medals_by_country_year, country_money, by = c("Year" = "year", "Team" = "country")) %>%
+  filter(!is.na(gdpPercap))
+
+ggplot(joined_data_athletes, aes(x = gdpPercap , y = Total_Athletes)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "red", se = FALSE) + #Plotting the athlete correlation
+  labs(title = "Number of Athletes vs Country's GDP Per Capita", x = "GDP Per Capita ($)", y = "Number of Athletes Country Sends")
+
+ggplot(joined_data_medals, aes(x = gdpPercap , y = Total_Medals)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) + #lm creates a smooth line to show a clear representation
+    labs(title = "Medals Won vs Country's GDP Per Capita", x = "GDP Per Capita ($)", y = "Medals Won")
+```
+
+> As we can see, there is in fact a positive correlation between a country’s gdp per capita and the number of medals and athletes a country has. This means that the higher the gdp is, the more medals it wins and more athletes it sends to the Olympics.
+
+
+### Part II
+
+```{r, include=FALSE}
+# Importing relevant data sets
+athlete_events  = read.csv("athlete_events.csv")
+host_cities = read.csv("host_cities.csv")
+
+# Renaming the 'city' variable in host_cities to 'City' so I can join the 2 datasets with key "City"
+host_cities <- rename(host_cities, "City" = "city")
+
+data <- full_join(athlete_events, host_cities, by = "City")
+```
+
+For the second question... I started by joining data sets together and creating a function that will filter the joint dataset for each country and in each of the seasons: determine whether they hosted or not. The function also displays a plot to compare the amount of medals that country won when they hosted vs when they did not. We will then compare and draw reasonable conclusions by creating a histogram containing the average number of medals all countries combined have won when they host vs in the competitions before.
+
+```{r}
+generate_country_medals_plot <- function(country_code, country_name, summer_hosts, winter_hosts) {
+ 
+  # SUMMER
+  summer_plot <- NULL
+ 
+  if (length(summer_hosts) > 0) {
+    summer_medals <- data %>%
+      filter(NOC == country_code & !is.na(Medal) & Season == "Summer" & Year %in% c(1896:2016)) %>%
+      distinct(Year, Event) %>%
+      group_by(Year) %>%
+      summarise(Medal_Count = n())
+   
+    summer_medals$Host <- ifelse(summer_medals$Year %in% summer_hosts, "Hosted", "Not Hosted")
+   
+    summer_plot <- ggplot(summer_medals, aes(x = Year, y = Medal_Count, fill = Host)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      geom_text(aes(label = Year), vjust = -0.5, position = position_dodge(width = 0.9)) +
+      labs(x = "Year", y = "Medals", title = paste("Summer Olympic Medals won by", country_name))
+  }
+ 
+  # WINTER
+  winter_plot <- NULL
+ 
+  if (length(winter_hosts) > 0) {
+    winter_medals <- data %>%
+      filter(NOC == country_code & !is.na(Medal) & Season == "Winter" & Year %in% c(1896:2016)) %>%
+      distinct(Year, Event) %>%
+      group_by(Year) %>%
+      summarise(Medal_Count = n())
+   
+    winter_medals$Host <- ifelse(winter_medals$Year %in% winter_hosts, "Hosted", "Not Hosted")
+   
+    winter_plot <- ggplot(winter_medals, aes(x = Year, y = Medal_Count, fill = Host)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      geom_text(aes(label = Year), position = position_dodge(width = 0.9)) +
+      labs(x = "Year", y = "Medals", title = paste("Winter Olympic Medals won by", country_name))
+  }
+ 
+  list(summer_plot = summer_plot, winter_plot = winter_plot)
+}
+```
+
+
+```{r, comment="", echo=FALSE, results='hide', fig.height=3, fig.width=5}
+usa_plots <- generate_country_medals_plot("USA", "United States", c(1904, 1932, 1984, 1996), c(1932, 1960, 1980, 2002))
+usa_plots
+
+australia_plots <- generate_country_medals_plot("AUS", "Australia", c(1956, 2000), numeric(0))
+australia_plots
+
+austria_plots <- generate_country_medals_plot("AUT", "Austria", numeric(0), c(1964, 1976))
+austria_plots
+
+belgium_plots <- generate_country_medals_plot("BEL", "Belgium", 1920, numeric(0))
+belgium_plots
+
+brazil_plots <- generate_country_medals_plot("BRA", "Brazil", 2016, numeric(0))
+brazil_plots
+
+canada_plots <- generate_country_medals_plot("CAN", "Canada", 1976, c(1988, 2010))
+canada_plots
+
+china_plots <- generate_country_medals_plot("CHN", "China", 2008, numeric(0))
+china_plots
+
+finland_plots <- generate_country_medals_plot("FIN", "Finland", 1952, numeric(0))
+finland_plots
+
+france_plots <- generate_country_medals_plot("FRA", "France", c(1900, 1924), c(1924, 1968, 1992))
+france_plots
+
+germany_plots <- generate_country_medals_plot(c("GER", "GDR"), "Germany", c(1936, 1972), c(1936, 1972))
+germany_plots
+
+greece_plots <- generate_country_medals_plot("GRE", "Greece", c(1896, 2004), numeric(0))
+greece_plots
+
+italy_plots <- generate_country_medals_plot("ITA", "Italy", 1960, c(1956, 2006))
+italy_plots
+
+japan_plots <- generate_country_medals_plot("JPN", "Japan", 1964, c(1972, 1998))
+japan_plots
+
+mexico_plots <- generate_country_medals_plot("MEX", "Mexico", 1968, numeric(0))
+mexico_plots
+
+netherlands_plots <- generate_country_medals_plot("NED", "Netherlands", 1928, numeric(0))
+netherlands_plots
+
+norway_plots <- generate_country_medals_plot("NOR", "Norway", numeric(0), c(1952, 1994))
+norway_plots
+
+russia_plots <- generate_country_medals_plot(c("URS", "RUS"), "Russia/USSR", 1980, 2014)
+russia_plots
+
+skorea_plots <- generate_country_medals_plot("KOR", "South Korea", 1988, numeric(0))
+skorea_plots
+
+spain_plots <- generate_country_medals_plot("ESP", "Spain", 1992, numeric(0))
+spain_plots
+
+sweden_plots <- generate_country_medals_plot("SWE", "Sweden", c(1912, 1956), numeric(0))
+sweden_plots
+
+switzerland_plots <- generate_country_medals_plot("SUI", "Switzerland", numeric(0), c(1928, 1948))
+switzerland_plots
+
+uk_plots <- generate_country_medals_plot("GBR", "United Kingdom", c(1908, 1948, 2012), numeric(0))
+uk_plots
+
+yugoslavia_plots <- generate_country_medals_plot("YUG", "Yugoslavia", numeric(0), 1984)
+yugoslavia_plots
+```
+
+As stated earlier, I created a histogram of the difference of medals **(by subtracting the medals won when they host minus the medals won in the olympic season directly prior)** to draw a reasonable conclusion.
+
+```{r}
+hist_data <- tibble(
+  NOC = c("USA", "AUS", "AUT", "BEL", "BRA", "CAN", "CHN", "FIN", "FRA", "GER", "GRE", "ITA", "JPN", "MEX", "NED", "NOR", "RUS", "KOR", "ESP", "SWE", "SUI", "GBR", "YUG"),
+  Medals_Won_Host = c(451, 83, 13, 33, 18, 39, 85, 22, 109, 102, 45, 47, 36, 9, 22, 29, 130, 30, 22, 64, 9, 165, 1),
+  Medals_Won_Year_Before = c(265, 49, 8, 5, 17, 29, 55, 19, 52, 39, 16, 33, 22, 1, 11, 18, 84, 18, 4, 53, 5, 76, 3))
+
+new <- hist_data %>%
+  mutate(Distribution_difference = Medals_Won_Host - Medals_Won_Year_Before)
+
+hist(new$Distribution_difference, xlab = "Difference between Medals (Host Season - Season Before)", main = "Histogram of the Distribution Difference", col = "lightgreen")
+```
+
+> We can see there is a positive host effect country on the amount of medals won when a country hosts the olympics vs when they don't because there is an overall positive difference.
