@@ -1,0 +1,48 @@
+---
+title: "2011 Masters Tournament Project"
+author: "Andre Contreras"
+date: "2024-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+```
+# 2011 Masters Golf Tournament Project
+
+```{r, fig.width=20, fig.height=12, warning=FALSE, message=FALSE}
+load(url("https://www.stat.osu.edu/~vqv/4194/data/masters2011-untidy.rda"))
+
+# Binds the rows of round1, round2,round3, and round4; specifies the name of the new column that will be created to store the source of each row in the resulting data frame, rounds
+rounds <- bind_rows(round1, round2, round3, round4, .id = "round")
+
+
+scorecard <- rounds %>% 
+  pivot_longer(cols = "1":"18", names_to = "hole", values_to = "score") %>% 
+  mutate(round = as.integer(round), hole = as.integer(hole), score = as.integer(score))
+
+
+performance <- scorecard %>%
+  left_join(course, by = "hole") %>%
+  mutate(difference_to_par = score - par) %>%
+  group_by(player) %>%
+  mutate(cumulative_to_par = cumsum(difference_to_par)) %>%
+  ungroup() %>%
+  select(player, round, hole, difference_to_par, cumulative_to_par)
+
+winner <- performance %>%
+  filter(round == 4) %>%
+  top_n(1, wt = -cumulative_to_par)
+  
+ggplot(performance) +
+  geom_line(aes(x = hole, y = cumulative_to_par, col = player)) +
+  facet_grid(. ~ round, labeller = labeller(round = c("1" = "round 1", "2" = "round 2", "3" = "round 3", "4" = "round 4"))) +
+  geom_label(aes(x = hole - 4, y = cumulative_to_par, label = player), data = winner) +
+  labs(title = "Performance Summary: Masters 2011 Pro Golf Tournament", x = "Hole", y = "Cumulative Score to Par", caption = "Overall winner: Charl Schwartzel") +
+  theme_minimal() +
+  theme(legend.position = "right", legend.key.size = unit(c(1, 1), "cm"), legend.text = element_text(size = 10))
+
+```
+
