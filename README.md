@@ -18,9 +18,9 @@ This project portfolio covers a diverse range of data analytics topics, each foc
 - Techniques: Data manipulation, correlation analysis, and visualization using ggplot2.
 
 ### 4. XLK Stock Price Prediction with Linear Regression
-Objective: Predict the future stock prices of XLK using machine learning techniques.
-Approach: Gathered historical stock data, split it into training and testing sets, trained a linear regression model, and evaluated its performance.
-Techniques: Data preprocessing, model training with linear regression, evaluation using Root Mean Square Error, and visualization using ggplot2.
+- Objective: Predict the future stock prices of XLK using machine learning techniques.
+- Approach: Gathered historical stock data, split it into training and testing sets, trained a linear regression model, and evaluated its performance.
+- Techniques: Data preprocessing, model training with linear regression, evaluation using Root Mean Square Error, and visualization using ggplot2.
   
 ### 5. Future Projects
 - Next Steps: Planning to analyze the passing networks of the 2003-2004 Arsenal FC soccer team using Graph Theory concepts and techniques.
