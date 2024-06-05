@@ -1,6 +1,6 @@
 This project portfolio covers a diverse range of data analytics, data science, and machine learning topics, each focusing on a different event or domain. Here's a summary of each project:
 
-(The Rmd contains the projoct code, the html and pdf are the outputs.)
+(The Porttfolio.Rmd contains the integrated projoct code, the Portfolio.html and pdf are the outputs.)
 
 ## Data Analysis Projects
 ### 1. 2011 Masters Golf Tournament Project
