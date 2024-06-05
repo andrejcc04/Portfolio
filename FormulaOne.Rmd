@@ -1,0 +1,1642 @@
+---
+title: "Formula 1 Lap Time Prediction and Evaluation"
+author: "Andre Contreras"
+date: "5/31/2024"
+output: 
+  prettydoc::html_pretty:
+    theme: tactile
+params:
+  driverId:
+    label: ""
+    input: text
+    value: 815
+  lap:
+    label: ""
+    input: text
+    value: 30
+  year:
+    label: ""
+    input: text
+    value: 2024
+  circuitId_isWinner:
+    label: "Enter the track's circuitId"
+    input: text
+    value: 7
+  year_isWinner:
+    label: "Enter any year after 2021"
+    input: text
+    value: 2024  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(readr)
+library(caret) # Confusion Matrix
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(randomForest) # Machine Learning RF Model (Classification & Regression)
+library(e1071) # Machine Learning SVM Model (Classification)
+library(gbm) # Machine Learning GB Model (Classification)
+```
+
+# Ensemble Methods Model to predict RACE WINNER
+```{r, include=FALSE}
+races <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/races.csv", na.strings = "\\N")
+lap_times <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/lap_times.csv", na.strings = "\\N")
+results <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/results.csv", na.strings = "\\N")
+drivers <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/drivers.csv", na.strings = "\\N")
+circuits <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/circuits.csv", na.strings = "\\N")
+driver_standings <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/driver_standings.csv", na.strings = "\\N")
+qualifying <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/qualifying.csv", na.strings = "\\N")
+status <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/status.csv", na.strings = "\\N")
+
+
+# Step 1: Extract Features
+f1data <- left_join(races, circuits, by = "circuitId")
+f1data <- left_join(f1data, results, by = "raceId")
+f1data <- left_join(f1data, drivers, by = "driverId")
+f1data <- left_join(f1data, status, by = "statusId")
+
+f1data <- na.omit(f1data) %>% 
+  filter(year >= 2021) %>%
+  select(circuitId, constructorId, year, driverId, grid, position, milliseconds) %>%
+  mutate(isWinner = ifelse(position == 1, TRUE, FALSE)) %>% # Feature Engineering
+  mutate(grid = ifelse(grid == 0, 21, grid)) %>%
+  select(-position)
+
+set.seed(123)
+
+f1data$isWinner <- as.factor(f1data$isWinner) # only 2 levels -- true and false so classification
+
+# STEP 2: SPLIT DATA INTO TRAIN AND TEST SETS
+split <- createDataPartition(f1data$isWinner, p = 0.8, list = FALSE)
+train_data <- f1data[split, ]
+test_data <- f1data[-split, ]
+
+
+
+# --------------------------- SUPPORT VECTOR MACHINE ---------------------------
+# The SVM is a supervised learning machine that classifies data by finding an optimal line that maximizes the distance between each class in an N-dimensional space.
+
+# STEP 3A: TRAIN SVM MODEL (Classification)
+svm_model <- svm(isWinner ~  constructorId + driverId + grid + year + circuitId, data = train_data, kernel = "poly", gamma = 0.25, cost = 2000, degree = 3) # Hyperparameter tuning (kernel, gamma, cost, degree)
+
+svm_predictions <- predict(svm_model, newdata = test_data)
+
+svm_binary_predictions <- ifelse(svm_predictions == TRUE, 1, 0)
+
+# -------------------------- RANDOM FOREST CLASSIFIER --------------------------
+# The Random Forest model grows multiple decision trees which are merged together for a more accurate prediction. The logic behind the Random Forest model is that multiple uncorrelated models (the individual decision trees) perform much better as a group than they do alone.
+
+# STEP 3B: TRAIN RF MODEL (Classification)
+
+rf_model <- randomForest(isWinner ~ constructorId + driverId + grid + year + circuitId, data = train_data, ntree = 500, mtry = 1, nodesize = 20)
+
+rf_predictions <- predict(rf_model, newdata = test_data, type = "response")
+
+rf_binary_predictions <- as.numeric(rf_predictions) - 1
+
+
+# ------------------------ GRADIENT BOOSITNG CLASSIFIER ------------------------
+# Boosting is one kind of ensemble Learning method which trains the model sequentially and each new model tries to correct the previous model. It combines several weak learners into strong learners.
+
+# STEP 3C: TRAIN GBM MODEL (Classification)
+
+train_data$isWinner_binary <- as.numeric(train_data$isWinner) - 1
+
+train_data <- train_data %>% 
+  select(circuitId, constructorId, year, driverId, grid, milliseconds, isWinner_binary)
+
+gb_model <- gbm(isWinner_binary ~ constructorId + driverId + grid + year + circuitId, data = train_data, distribution = "bernoulli", n.trees = 100, interaction.depth = 3, shrinkage = 0.01)
+
+gb_predictions <- predict(gb_model, newdata = test_data, type = "response")
+
+gb_binary_predictions <- ifelse(gb_predictions > 0.5, 1, 0)
+
+# ------------------------- FINAL ENSEMBLE METHOD MODEL ------------------------
+
+final_predictions <- ifelse(svm_binary_predictions + rf_binary_predictions + gb_binary_predictions >= 2, 1, 0)
+
+
+# STEP 4: EVALUATE MODEL --- For classification tasks, you can evaluate the model using metrics such as accuracy, precision, recall, or F1-score
+
+# Calculate confusion matrix 
+test_data$isWinner_binary <- as.numeric(test_data$isWinner) - 1
+
+confusion_matrix <- confusionMatrix(data = as.factor(final_predictions), reference = as.factor(test_data$isWinner_binary))
+confusion_matrix
+
+# True Positive: Model correctly predicts a driver didn't win race (156)
+# False Positive: Model incorrectly predicts driver didn't win, when they did (7)
+# True Negative: Model correctly predicts a driver won the race (7)
+# False Negative: Model incorrectly predicts a driver won race when they didn't (2)
+balanced_accuracy <- confusion_matrix$byClass["Balanced Accuracy"]
+
+# PRECISION = 158 / (158+7) = 0.958
+precision <- confusion_matrix$byClass["Pos Pred Value"]
+
+# SENSITIVITY = 158 / (158 + 0) = 1
+recall <- confusion_matrix$byClass["Sensitivity"]
+
+# SPECIFICITY = (7 / [7 + 7]) = 0.5
+specificity <- confusion_matrix$byClass["Specificity"]
+  
+# F1 SCORE= 2 * (0.958 * 1) / (0.958 + 1) = 0.978
+f1score <- confusion_matrix$byClass["F1"]
+
+summary <- data.frame(
+  "SVM Prediction" = svm_binary_predictions,
+  "RF Prediction" = rf_binary_predictions,
+  "GB Prediction" = gb_binary_predictions,
+  "Final Prediction" = final_predictions,
+  "Actual Winner" = test_data$isWinner_binary
+)
+
+# STEP 5: VISUALIZE RESULTS
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "Specificity", "F1 Score"),
+  Value = c(balanced_accuracy, precision, recall, specificity, f1score)
+)
+
+ggplot(metrics_df, aes(x = Metric, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(Value, 4)), vjust = -0.5) +
+  labs(title = "Model Evaluation Metrics", y = "Value")
+
+
+# STEP 6: USER INTERFACE
+user_input <- data.frame(
+  circuitId = rep(params$circuitId_isWinner, 20), # Replicate circuitId for all rows
+  constructorId = c(9, 9, 6, 6, 1, 1, 131, 131, 117, 117, 215, 215, 214, 214, 210, 210, 15, 15, 3, 3),
+  year = rep(params$year_isWinner, 20), # Replicate year for all rows
+  driverId = c(830, 815, 844, 832, 846, 857, 1, 847, 4, 840, 852, 817, 842, 839, 825, 807, 822, 855, 848, 858), 
+  grid = rep(0, 20), # Placeholder for grid
+  milliseconds = rep(0, 20) # Placeholder for milliseconds
+)
+  
+ui_svm_predictions <- predict(svm_model, newdata = user_input)
+ui_svm_binary_predictions <- ifelse(ui_svm_predictions == TRUE, 1, 0)
+
+ui_rf_predictions <- predict(rf_model, newdata = user_input, type = "response")
+ui_rf_binary_predictions <- ifelse(ui_rf_predictions == TRUE, 1, 0)
+
+ui_gb_predictions <- predict(gb_model, newdata = user_input, type = "response")
+ui_gb_binary_predictions <- ifelse(ui_gb_predictions > 0.5, 1, 0)
+    
+ui_final_predictions <- ifelse(ui_svm_binary_predictions + ui_rf_binary_predictions + ui_gb_binary_predictions >= 2, 1, 0)
+
+user_input <- user_input %>% 
+  mutate(ui_final_predictions) %>% 
+  left_join(drivers, by = "driverId")
+
+winner_index <- which(user_input$ui_final_predictions == 1)
+name <- user_input$forename[winner_index]
+lastname <- user_input$surname[winner_index]
+
+circuit <- unique(races$name[races$circuitId == params$circuitId_isWinner])
+
+cat("Predicted Winner of the", params$year_isWinner, circuit, ":", name, lastname)
+```
+
+
+# _______________________________________________________________________________
+
+# Pre-Race Lap Time Predictions
+```{r, echo=FALSE}
+# Step 1: Extract Features
+races <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/races.csv", na.strings = "\\N")
+lap_times <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/lap_times.csv", na.strings = "\\N")
+results <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/results.csv", na.strings = "\\N")
+drivers <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/drivers.csv", na.strings = "\\N")
+circuits <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/circuits.csv", na.strings = "\\N")
+driver_standings <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/driver_standings.csv", na.strings = "\\N")
+qualifying <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/qualifying.csv", na.strings = "\\N")
+status <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/status.csv", na.strings = "\\N")
+
+# Join data sets
+lap_times <- left_join(lap_times, races, by = "raceId")
+lap_times <- left_join(lap_times, circuits, by = "circuitId")
+lap_times <- left_join(lap_times, drivers, by = "driverId")
+
+# Convert milliseconds to minutes:seconds:milliseconds format
+convert_to_time <- function(milliseconds) {
+  minutes <- floor(milliseconds / (1000 * 60))
+  seconds <- floor((milliseconds %% (1000 * 60)) / 1000)
+  milliseconds <- milliseconds %% 1000
+  return(paste(minutes, seconds, round(milliseconds, 0), sep = ":"))
+}
+```
+
+**Note: 1 second = 1000 milliseconds**
+
+## 2024 Bahrain Grand Prix (Bahrain)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 101500)
+
+bahraingp_laptime <- lap_times %>% 
+  filter(year == c(2022:2023) & circuitId == 3) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(bahraingp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- bahraingp_laptime[split, ]
+testing <- bahraingp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing) #testing on previous years, not actually making predictions, just checking the accuracy of model.
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+bahrain_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+
+rmse_predictions <- sqrt(mean((testing$milliseconds - bahrain_predicted_laptime)^2))
+
+predicted_laptime_adjusted <- convert_to_time(bahrain_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Bahrain Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions, 0), "milliseconds")
+```
+
+## 2024 Saudi Arabian Grand Prix (Jeddah)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 97000)
+
+saudiarabiagp_laptime <- lap_times %>% 
+  filter(year == c(2022:2023) & circuitId == 77) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(saudiarabiagp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- saudiarabiagp_laptime[split, ]
+testing <- saudiarabiagp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing)
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+saudi_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+rmse_predictions <- sqrt(mean((testing$milliseconds - saudi_predicted_laptime)^2))
+
+predicted_laptime_adjusted <- convert_to_time(saudi_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Saudi Arabian Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions,0), "milliseconds")
+```
+
+## 2024 Autralian Grand Prix (Melbourne)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 86000)
+
+australiangp_laptime <- lap_times %>% 
+  filter(year == c(2022:2023) & circuitId == 1) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(australiangp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- australiangp_laptime[split, ]
+testing <- australiangp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing)
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+australia_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+rmse_predictions <- sqrt(mean((testing$milliseconds - australia_predicted_laptime)^2))
+  
+predicted_laptime_adjusted <- convert_to_time(australia_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Australian Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions,0), "milliseconds")
+```
+
+## 2024 Japanese Grand Prix (Suzuka)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 102000)
+
+japangp_laptime <- lap_times %>% 
+  filter(year > 2021 & circuitId == 22) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(japangp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- japangp_laptime[split, ]
+testing <- japangp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing)
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+japan_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+rmse_predictions <- sqrt(mean((testing$milliseconds - japan_predicted_laptime)^2))
+
+predicted_laptime_adjusted <- convert_to_time(japan_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Japanese Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions,0), "milliseconds")
+```
+
+## 2024 Chinese Grand Prix (Shanghai)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 104000)
+
+chinagp_laptime <- lap_times %>% 
+  filter(year > 2021 & circuitId == 17) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(chinagp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- chinagp_laptime[split, ]
+testing <- chinagp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing)
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+china_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+rmse_predictions <- sqrt(mean((testing$milliseconds - china_predicted_laptime)^2))
+
+predicted_laptime_adjusted <- convert_to_time(china_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Chinese Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions,0), "milliseconds")
+```
+
+## 2024 Miami Grand Prix (Miami)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 96000)
+
+miamigp_laptime <- lap_times %>% 
+  filter(year == c(2022:2023) & circuitId == 79) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(miamigp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- miamigp_laptime[split, ]
+testing <- miamigp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing)
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+miami_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+rmse_predictions <- sqrt(mean((testing$milliseconds - miami_predicted_laptime)^2))
+
+predicted_laptime_adjusted <- convert_to_time(miami_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Miami Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions,0), "milliseconds")
+```
+
+## 2024 Emilia-Romagna Grand Prix (Imola)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 84000)
+
+imolagp_laptime <- lap_times %>% 
+  filter(year == c(2022:2023) & circuitId == 21) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(imolagp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- imolagp_laptime[split, ]
+testing <- imolagp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing)
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+imola_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+rmse_predictions <- sqrt(mean((testing$milliseconds - imola_predicted_laptime)^2))
+
+predicted_laptime_adjusted <- convert_to_time(imola_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Imola Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions,0), "milliseconds")
+```
+
+## 2024 Monaco Grand Prix (Monte Carlo)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 82000)
+
+monacogp_laptime <- lap_times %>% 
+  filter(year == c(2022:2023)  & circuitId == 6) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(monacogp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- monacogp_laptime[split, ]
+testing <- monacogp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+model_evaluation <- predict(model, newdata = testing)
+rmse <- sqrt(mean((testing$milliseconds - model_evaluation)^2))
+new <- testing %>% 
+  mutate(model_evaluation)
+
+# Step 5: Visualize
+plot(model_evaluation, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+monaco_predicted_laptime <- round(predict(model, newdata = user_input), 0)
+rmse_predictions <- sqrt(mean((testing$milliseconds - monaco_predicted_laptime)^2))
+
+predicted_laptime_adjusted <- convert_to_time(monaco_predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Monaco Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse_predictions,0), "milliseconds")
+```
+
+## 2024 Canadian Grand Prix (Montreal)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 80000)
+
+canadagp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 7) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+  
+
+# Step 2: Split data
+split <- createDataPartition(canadagp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- canadagp_laptime[split, ]
+testing <- canadagp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Canadian Grand Prix:", predicted_laptime_adjusted)
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Spanish Grand Prix (Catalunya)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 92000)
+
+spanishgp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 4) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+  
+
+# Step 2: Split data
+split <- createDataPartition(spanishgp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- spanishgp_laptime[split, ]
+testing <- spanishgp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Canadian Grand Prix:", predicted_laptime_adjusted)
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Austrian Grand Prix (Spielberg)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 73000)
+
+austriagp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 70) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+
+# Step 2: Split data
+split <- createDataPartition(austriagp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- austriagp_laptime[split, ]
+testing <- austriagp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Austrian Grand Prix:", predicted_laptime_adjusted)
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 British Grand Prix (Silverstone)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 95500)
+
+britishgp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 9) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(britishgp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- britishgp_laptime[split, ]
+testing <- britishgp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "British Grand Prix:", predicted_laptime_adjusted)
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Hungarian Grand Prix (Budapest)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 86000)
+
+hungarygp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 11) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(hungarygp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- hungarygp_laptime[split, ]
+testing <- hungarygp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Hungarian Grand Prix:", predicted_laptime_adjusted)
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Belgian Grand Prix (Spa)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 116000)
+
+belgiangp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 13) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(belgiangp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- belgiangp_laptime[split, ]
+testing <- belgiangp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Belgian Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Dutch Grand Prix (Zandvoort)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 79000)
+
+dutchgp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 39) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(belgiangp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- dutchgp_laptime[split, ]
+testing <- dutchgp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Dutch Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Italian Grand Prix (Monza)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 89000)
+
+monzagp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 14) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(monzagp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- monzagp_laptime[split, ]
+testing <- monzagp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Italian Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Azerbaijan Grand Prix (Baku)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 110000)
+
+azerbaijangp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 73) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(azerbaijangp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- azerbaijangp_laptime[split, ]
+testing <- azerbaijangp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Azerbaijan Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Singapore Grand Prix (Marina Bay)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 102000)
+
+singaporegp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 15) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(singaporegp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- singaporegp_laptime[split, ]
+testing <- singaporegp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Singapore Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 United States Grand Prix (Austin)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 106000)
+
+usa_laptime <- lap_times %>% 
+  filter(year > 2021 & circuitId == 69) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(usa_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- usa_laptime[split, ]
+testing <- usa_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "United States Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Mexican Grand Prix (Mexico City)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 85500)
+
+mexicogp_laptime <- lap_times %>% 
+  filter(year > 2021 & circuitId == 32) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(mexicogp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- mexicogp_laptime[split, ]
+testing <- mexicogp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Mexican Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Brazilian Grand Prix (Sao Paulo)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 80000)
+
+brazilgp_laptime <- lap_times %>% 
+  filter(year > 2021 & circuitId == 18) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(brazilgp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- brazilgp_laptime[split, ]
+testing <- brazilgp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Brazilian Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Las Vegas Grand Prix (Las Vegas)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 102000)
+
+lasvegas_laptime <- lap_times %>% 
+  filter(year > 2021 & circuitId == 80) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(lasvegas_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- lasvegas_laptime[split, ]
+testing <- lasvegas_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Las Vegas Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Qatar Grand Prix (Losail)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 91000)
+
+qatargp_laptime <- lap_times %>% 
+  filter(year > 2021 & circuitId == 78) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(qatargp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- qatargp_laptime[split, ]
+testing <- qatargp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Qatar Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+## 2024 Abu Dhabi Grand Prix (Abi Dhabi)
+```{r, fig.width=15, echo=FALSE}
+z_scores <- scale(lap_times$milliseconds)
+outliers <- which(lap_times$milliseconds > 88000)
+
+abudhabigp_laptime <- lap_times %>% 
+  filter(year > 2020 & circuitId == 14) %>%
+  select(raceId, driverId, code, lap, milliseconds, year, circuitId, location) %>% 
+  filter(!milliseconds %in% lap_times$milliseconds[outliers]) # Remove outliers
+
+# Step 2: Split data
+split <- createDataPartition(abudhabigp_laptime$milliseconds, p = 0.6, list = FALSE)
+training <- abudhabigp_laptime[split, ]
+testing <- abudhabigp_laptime[-split, ]
+
+
+# Step 3: Train Model
+model <- lm(formula = milliseconds ~ driverId + lap + year, data = training)
+
+
+# Step 4: Evaluate model
+predictions <- predict(model, newdata = testing)
+
+rmse <- sqrt(mean((testing$milliseconds - predictions)^2))
+
+new <- testing %>% 
+  mutate(predictions)
+
+# Step 5: Visualize
+plot(predictions, testing$milliseconds, xlab = "Predicted Time", ylab = "Actual Time", main = "Predicted vs Actual Time (Milliseconds)")
+abline(0, 1, col = "red")
+
+# Step 6: UI - MAKE PREDICTIONS
+user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year)
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code)
+
+predicted_laptime <- predict(model, newdata = user_input)
+
+predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+  
+cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Abu Dhabi Grand Prix:", predicted_laptime_adjusted, "\n")
+cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
+```
+
+# ____________________________________________________________________________
+
+# Post-Race Data Analysis
+
+## 2024 Bahrain Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Bahrain Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+bahrain_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(bahrain_predicted_laptime)
+
+comparison <- left_join(comparison, bahrain_join, by = "name") %>%
+  select(forename, surname, year, name, lap, bahrain_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = bahrain_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
+
+bahrain_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 3)
+
+ggplot(bahrain_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Bahrain Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+bahrain_plot_data$lap <- factor(bahrain_plot_data$lap, levels = unique(bahrain_plot_data$lap))
+ggplot(bahrain_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Bahrain Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Saudi Arabian Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Saudi Arabian Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+saudi_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(saudi_predicted_laptime)
+
+comparison <- left_join(comparison, saudi_join, by = "name") %>%
+  select(forename, surname, year, name, lap, saudi_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = saudi_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
+
+saudi_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 77)
+
+ggplot(saudi_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Saudi Arabian Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+saudi_plot_data$lap <- factor(saudi_plot_data$lap, levels = unique(saudi_plot_data$lap))
+ggplot(saudi_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Saudi Arabian Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Australian Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Australian Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+australia_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(australia_predicted_laptime)
+
+comparison <- left_join(comparison, australia_join, by = "name") %>%
+  select(forename, surname, year, name, lap, australia_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = australia_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
+
+australia_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 1)
+
+ggplot(australia_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Australian Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+australia_plot_data$lap <- factor(australia_plot_data$lap, levels = unique(australia_plot_data$lap))
+ggplot(australia_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Australian Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Japanese Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Japanese Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+japan_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(japan_predicted_laptime)
+
+comparison <- left_join(comparison, japan_join, by = "name") %>%
+  select(forename, surname, year, name, lap, japan_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = japan_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
+
+japan_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 22 & milliseconds < 500000)
+
+ggplot(japan_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Japanese Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+japan_plot_data$lap <- factor(japan_plot_data$lap, levels = unique(japan_plot_data$lap))
+ggplot(japan_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Japanese Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Chinese Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Chinese Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+china_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(china_predicted_laptime)
+
+comparison <- left_join(comparison, china_join, by = "name") %>%
+  select(forename, surname, year, name, lap, china_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = china_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds (Safety Car lap 21-31)")
+
+china_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 17 & milliseconds < 200000)
+
+ggplot(china_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Chinese Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+china_plot_data$lap <- factor(china_plot_data$lap, levels = unique(china_plot_data$lap))
+ggplot(china_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Chinese Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Miami Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Miami Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+miami_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(miami_predicted_laptime)
+
+comparison <- left_join(comparison, miami_join, by = "name") %>%
+  select(forename, surname, year, name, lap, miami_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = miami_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds (Safety Car lap 28-32)")
+
+miami_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 79)
+
+ggplot(miami_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Miami Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+miami_plot_data$lap <- factor(miami_plot_data$lap, levels = unique(miami_plot_data$lap))
+ggplot(miami_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Miami Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Emilia-Romagna Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Emilia Romagna Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+imola_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(imola_predicted_laptime)
+
+comparison <- left_join(comparison, imola_join, by = "name") %>%
+  select(forename, surname, year, name, lap, imola_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = imola_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
+
+imola_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 21 & milliseconds < 150000)
+
+ggplot(imola_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Imola Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+imola_plot_data$lap <- factor(imola_plot_data$lap, levels = unique(imola_plot_data$lap))
+ggplot(imola_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Imola Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Monaco Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Monaco Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+monaco_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(monaco_predicted_laptime)
+
+comparison <- left_join(comparison, monaco_join, by = "name") %>%
+  select(forename, surname, year, name, lap, monaco_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = monaco_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds (Crashed out lap 1)")
+
+monaco_plot_data <- lap_times %>% 
+  filter(year == 2024 & circuitId == 6 & milliseconds < 250000)
+
+ggplot(monaco_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplot of Lap Times by Driver in Monaco Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Driver")
+
+monaco_plot_data$lap <- factor(monaco_plot_data$lap, levels = unique(monaco_plot_data$lap))
+ggplot(monaco_plot_data, aes(x = milliseconds, y = lap)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Lap Times by Lap in Monaco Grand Prix",
+       x = "Laptime (milliseconds)",
+       y = "Lap")
+```
+
+## 2024 Canadian Grand Prix Post-Race Analysis and Evaluation
