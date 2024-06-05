@@ -17,8 +17,8 @@ This project portfolio covers a diverse range of data analytics, data science, a
   
 ### 3. A Data-led Look into the History of the Olympics
 - Objective: Investigate the relationship between a country's economic stability, Olympic performance, and the impact of hosting the Olympics.
-- Approach: Analyzed datasets spanning the history of the Olympics, manipulating and visualizing data to draw insights.
-- Techniques: Data manipulation, data analysis, correlation analysis, and visualization using ggplot2.
+- Approach: Analyzed datasets spanning the history of the Olympics, created functions, manipulating and visualizing data to draw insights.
+- Techniques: Data manipulation, data analysis, correlation analysis, and visualization using ggplot2, function creation.
 - **Where to find:** Olympic History Data Analysis.Rmd, Portfolio.Rmd
 
 ## Machine Learning Models:
