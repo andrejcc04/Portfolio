@@ -1,0 +1,179 @@
+---
+title: "Machine Learning House Market"
+author: "Andre Contreras"
+date: "2024-05-29"
+output: 
+  prettydoc::html_pretty:
+    theme: tactile
+params:
+  num_beds:
+    label: "Number of Bedrooms"
+    input: text
+    value: 4
+  num_baths:
+    label: "Number of Bathrooms"
+    input: text
+    value: 3
+  living_space:
+    label: "Living Space Area (sqft)"
+    input: text
+    value: 1609
+  state:
+    label: "State of Residence"
+    input: text
+    value: "Illinois"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+# If you're going to include User Interface in an R Markdown document, it's important that you set and specify the values/parameters in the YAML header rather than in the code itself, and then call the parameters using param$variable_name.
+
+# This is a much more consistent way, Doing it in the code itself will not allow you to knit the R Markdown document code because it is inconsistent
+
+# However, you have to specify the values of the parameters in the YAML header, if I were to want an interactive interface, R Shiny is recommended.
+
+library(readr)
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(datasets) # for state abbreviation in ggplot
+```
+
+# House Market Linear Regression Model
+
+```{r, fig.width=10}
+set.seed(1)
+
+# Step 1: Extract Features
+data <- read_csv("USA_Housing_Data.csv")
+
+# Changing the name of the variables I will use that have spaces because R doesn't like spaces so it will allow for smoother data manipulation.
+names(data)[names(data) == "Living Space"] <- "Living_Space"
+names(data)[names(data) == "Median Household Income"] <- "Median_Household_Income"
+
+# Assigning a unique numeric identifier for each state in the data to put in the lm() regression model (since it doesn't accept categorical variables when creating the formula)
+data$State <- factor(data$State)
+data$State_numeric <- as.integer(data$State)
+
+  # 1A: Removing Missing Values
+  clean_data <- na.omit(data)
+
+  # 1B: Calculate Z-scores for each variable to detect and remove outliers
+  z_scores <- scale(clean_data$Price)
+  outliers <- which(abs(z_scores) > 2)
+  
+  z_scores_beds <- scale(clean_data$Beds)
+  outliers_beds <- which(abs(z_scores_beds) > 2)
+  
+  z_scores_baths <- scale(clean_data$Baths)
+  outliers_baths <- which(abs(z_scores_baths) > 2)
+  
+  z_scores_space <- scale(clean_data$Living_Space)
+  outliers_space <- which(abs(z_scores_space) > 2)
+
+  # 1C: Filtering the data so it's ready for modelling
+  clean_data <- clean_data %>% 
+    filter(!Price %in% clean_data$Price[outliers]) %>% 
+    filter(!Beds %in% clean_data$Beds[outliers_beds]) %>% 
+#    filter(!Baths %in% clean_data$Baths[outliers_baths]) %>% 
+#    filter(!Living_Space %in% clean_data$Living_Space[outliers_space]) %>%
+    select(Price, Beds, Baths, Living_Space, State, State_numeric)
+
+  
+# ---------- ONLY READ AFTER COMPLETING REGRESSION IN R DATACAMP COURSE ----------
+  
+#clean_data$State <- factor(clean_data$State)
+# Since, State is a categorical variable, and lm() only accepts numeric variables be used in determining the model formula, we need to convert it to factors.
+
+#dummy_vars <- model.matrix(~ State - 1, data = clean_data)
+#clean_data <- cbind(clean_data, dummy_vars) 
+# Since categorical variable has more than 2 levels, we need to encode it into dummy(placeholder) variables.
+# ----------------------------------------------------------------------------
+  
+# Step 2: Separate into 2 datasets (Training & Testing)
+split <- createDataPartition(clean_data$Price, p = 0.98, list = FALSE)
+
+training_data <- clean_data[split, ]
+testing_data <- clean_data[-split, ]
+  
+
+# Step 3: Train Model
+model <- lm(Price ~., data = training_data)
+
+predictions <- predict(model, newdata = testing_data)
+
+
+# Step 4: Evaluate Model
+rmse <- sqrt(mean((testing_data$Price - predictions)^2))
+cat("Root Mean Square Error =", rmse)
+
+
+# Step 5: Display results, Price correlation with each important house feature.
+ggplot(testing_data, aes(x = Living_Space, y = Price)) +
+  geom_line(aes(y = predictions, color = "Predictions")) +
+  geom_point(aes(color = "Actual Price")) +
+  geom_smooth(method = "lm", aes(color = "Regression Line")) +
+  labs(x = "Size (sqft)", y = "Price ($)", title = "Linear Regression Model Prediction for Price of Houses") +
+  scale_y_continuous(labels = scales::comma, breaks = seq(500000, 3000000, by = 500000)) +
+  scale_x_continuous(breaks = seq(1000, 6000, by = 1000)) +
+  scale_color_manual(name = "Legend", values = c("black", "blue", "red"))
+
+# ggplot(testing_data, aes(x = Beds, y = Price)) +
+#   geom_point() +
+#   geom_smooth(method = "lm") +
+#   labs(x = "Number of Beds", y = "Price ($)", title = "Linear Regression Model Prediction for Price of Houses") +
+#   scale_y_continuous(labels = scales::comma, breaks = seq(500000, 3000000, by = 500000)) +
+#   scale_x_continuous(breaks = seq(1, 7, by = 1))
+# 
+# ggplot(testing_data, aes(x = Baths, y = Price)) +
+#   geom_point() +
+#   geom_smooth(method = "lm") +
+#   labs(x = "Number of Bathrooms", y = "Price ($)", title = "Linear Regression Model Prediction for Price of Houses") +
+#   scale_y_continuous(labels = scales::comma, breaks = seq(500000, 3000000, by = 500000)) +
+#   scale_x_continuous(breaks = seq(1, 6, by = 1))
+
+# Create a mapping from state names to abbreviations
+state_abbreviations <- setNames(state.abb, tolower(state.name))
+
+# Convert state names in testing_data to abbreviations
+testing_data$State_Abbreviation <- state_abbreviations[tolower(testing_data$State)]
+
+ggplot(testing_data, aes(x = State_Abbreviation, y = Price)) +
+  geom_boxplot() +
+  labs(x = "State", y = "Price ($)", title = "Boxplot for Price of Houses by State") +
+  scale_y_continuous(labels = scales::comma, breaks = seq(500000, 3000000, by = 500000))
+
+
+plot(testing_data$Price, predictions, 
+     xlab = "Observed", ylab = "Predicted", 
+     main = "Observed vs. Predicted Values",
+     col = "black")
+# Red "Perfect" Line
+abline(0, 1, col = "red")
+
+
+
+# Step 6: Create Interface
+# Creating a data frame with user input in param header of r markdown document
+user_input <- data.frame( # If needed, use as.numeric() on numeric variables.
+  Beds = params$num_beds,
+  Baths = params$num_baths,
+  Living_Space = params$living_space,
+  State = params$state
+)
+
+# Check if state is in data
+if (params$state %in% unique(clean_data$State)) {
+  # Converting state input to its corresponding numeric identifier
+  State_numeric <- clean_data$State_numeric[match(params$state, clean_data$State)]
+  user_input$State_numeric <- State_numeric
+  
+  predicted_price <- predict(model, newdata = user_input)
+  
+  cat("Predicted house price: $", round(predicted_price, 2))
+} else {
+  stop("Unfortunately, we do not have a record of homes in your state, thus we cannot provide a prediction on the price of your house.")
+}
+```
+
