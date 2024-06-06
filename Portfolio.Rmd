@@ -1,8 +1,8 @@
 ---
-title: "My Portfolio"
+title: "Project Portfolio"
 author: "Andre Contreras"
 date: "2023-2024"
-output: 
+output:   
   prettydoc::html_pretty:
     theme: tactile
 params:
@@ -31,6 +31,10 @@ params:
     input: text
     value: 2024 
 ---
+
+#### This page covers a diverse range of data analytics, data science, and machine learning techniques and topics I have worked on, each focusing on a different event or domain. Hope you find my findings interesting!
+
+**The code I used for the following projects can all be found in my GitHub Repository:** ***https://github.com/andrejcc04/Portfolio***
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
@@ -65,12 +69,12 @@ library(countrycode)
 # **Machine Learning Models**
 
   As I was watching the 2024 Monaco Grand Prix- I wondered how hard it would be to build a Machine Learning model that could (somewhat) successfully predict the winner of the races to come, so I got to work and after a couple of days of trial and error I managed to build a model. 
-  I started off with just a Random Forest Classification model, but it wasn't giving me the results I wanted. Therefore, I figured I should create 3 different classification models (Support Vector Machine, Random Forest, and Gradient Boosting) to then combine them all in this Ensemble Methods model and see if that got me more precise results... It did, with incredibly high evaluation scores (shown in the Metric Evaluation Plot).
+  I started off with just a Random Forest Classification model, but it wasn't giving me the results I wanted. Therefore, I figured I should create 3 different classification models (Support Vector Machine, Random Forest, and Gradient Boosting) to then combine them all in this Ensemble Methods model and see if that got me more precise results... It did!
 
-P.S I was also able to build a model to predict X driver's lap time on lap Y in the circuit Z, but that html output alone is bigger than this one so I might just keep it in a separate html.
+**P.S I was also able to build a model to predict X driver's lap time on lap Y in the circuit Z, but that html output alone is bigger than this one so I might just keep it in a separate html:** ***https://rpubs.com/andrejcc/1192931***
 
-## 1. Ensemble Methods Model to predict RACE WINNER
-```{r}
+## 1. Ensemble Methods Model to predict **Race Winner**
+```{r, echo=FALSE}
 races <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/races.csv", na.strings = "\\N")
 lap_times <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/lap_times.csv", na.strings = "\\N")
 results <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/results.csv", na.strings = "\\N")
@@ -160,7 +164,7 @@ confusion_matrix
 # False Positive: Model incorrectly predicts driver didn't win, when they did (7)
 # True Negative: Model correctly predicts a driver won the race (7)
 # False Negative: Model incorrectly predicts a driver won race when they didn't (2)
-balanced_accuracy <- confusion_matrix$byClass["Balanced Accuracy"]
+accuracy <- confusion_matrix$overall["Accuracy"]
 
 # PRECISION = 158 / (158+7) = 0.958
 precision <- confusion_matrix$byClass["Pos Pred Value"]
@@ -185,7 +189,7 @@ summary <- data.frame(
 # STEP 5: VISUALIZE RESULTS
 metrics_df <- data.frame(
   Metric = c("Accuracy", "Precision", "Recall", "Specificity", "F1 Score"),
-  Value = c(balanced_accuracy, precision, recall, specificity, f1score)
+  Value = c(accuracy, precision, recall, specificity, f1score)
 )
 
 ggplot(metrics_df, aes(x = Metric, y = Value, fill = Metric)) +
@@ -230,8 +234,7 @@ cat("Predicted Winner of the", params$year_isWinner, circuit, ":", name, lastnam
 
 **Accuracy**: The overall accuracy of 0.9593 indicates the proportion of correct predictions made by the model on the entire test dataset.
 
-**Precision:** The precision quantifies the model's ability to avoid incorrectly predicting a driver did not win the race, when they actually did (false positives).
-***Therefore, a high precision score of 0.957 indicates that when the model predicts a driver as not winning the race, it is correct about 95.7% of the time.***
+**Precision:** The precision quantifies the model's ability to avoid incorrectly predicting a driver did not win the race, when they actually did (false positives). ***Therefore, a high precision score of 0.957 indicates that when the model predicts a driver as not winning the race, it is correct about 95.7% of the time.***
 
 **Sensitivity (Recall):** The sensitivitiy quantifies the model's ability to successfully capture all cases where a driver didn't win (positive cases). The sensitivity score of 1 suggests that the model is able to successfully capture a high proportion of the cases where a driver actually did not win the race. ***This means that when a driver did not win the race, the model correctly identifies them as such 100% of the time.***
 
@@ -244,11 +247,11 @@ cat("Predicted Winner of the", params$year_isWinner, circuit, ":", name, lastnam
 
 # ______________________________________________________________________________
 
-# 2. Linear Regression Model on XLK Stock
+## 2. Linear Regression Model on XLK Stock Price
 
-In the code below, I successfully train a Machine Learning model by gathering and manipulating the relevant data, splitting it into two sets (train & test), training a linear regression model, and testing it on the data set aside for testing. The resulting model displays a Root Mean Square Error of only 0.69, meaning that on average, my predictions are off by $0.69. I also included a regression line to show that on average, the stock price has gone up in the past year as well as a perfect fit line in the other plot.
+I successfully train a Machine Learning model by gathering and manipulating the relevant data, splitting it into two sets (train & test), training a linear regression model, and testing it on the data set aside for testing. The resulting model displays a Root Mean Square Error of only 0.69, meaning that on average, my predictions are off by $0.69. I also included a regression line to show that on average, the stock price has gone up in the past year as well as a perfect fit line in the other plot.
 
-```{r, message=FALSE, warning=FALSE, fig.width=12}
+```{r, message=FALSE, warning=FALSE, fig.width=12, echo=FALSE}
 # 1. Read the CSV files into data frames
 data <- read_csv("XLK dataset.csv")
 
@@ -266,6 +269,7 @@ predictions <- predict(model, newdata = testing_data)
 
 # Evaluate performance using Root Mean Square Error
 rmse <- sqrt(mean((testing_data$Close - predictions)^2))
+cat("Root Mean Squared Error: $", round(rmse, 2))
 
 # Plot
 ggplot(testing_data, aes(Date-19500, Close)) +
@@ -289,13 +293,13 @@ abline(0, 1, col = "red")
 
 # ______________________________________________________________________________
 
-# 3. Linear Regression Model on House Market
+## 3. Linear Regression Model on **American House Prices** 
 
-Recently, I found at our neighbors were selling their house and moving away. I was curious how much the house would cost so I went on Zillow and to my surprise, it was worth nearly $200,000 more than ours! After looking at the pictures available, it was easy to understand why: they had a finished basement, a breakfast sunroom, and their house was nearly 1000 sqft bigger than hours. 
+Recently, I found at our neighbors were selling their house and moving away. I was curious how much the house would cost so I went on Zillow and to my surprise, it was worth way more than ours. After looking at the pictures available, it was easy to understand why: they had a finished basement, a breakfast sunroom, and their house was nearly 1000 sqft bigger than ours. 
 
 This got me wondering how important certain features have in a home, especially the number of beds, baths, and its size in sqft. I got to work building a linear regression model that is able to predict the price of a house given the features as input. All in all, it turned out pretty good.
 
-```{r, fig.width=10}
+```{r, fig.width=10, message=FALSE, echo=FALSE}
 set.seed(1)
 
 # Step 1: Extract Features
@@ -430,18 +434,18 @@ if (params$state %in% unique(clean_data$State)) {
 
 # ______________________________________________________________________________
 
-# 2011 Masters Golf Tournament Project
+# Data Analysis Projects
 
- The plot below is a line graph I created visualizing the summary of the Masters 2011 Pro Golf Tournament, along with the performance of each golfer and the overall winner of the comptetition (Charl Schwartzel). 
+## 1. 2011 Masters Golf Tournament Analysis
 
-```{r, include=FALSE}
-# For Golf:
+The plot below is a line graph I created visualizing the summary of the Masters 2011 Pro Golf Tournament, along with the performance of each golfer and the overall winner of the comptetition (Charl Schwartzel). 
+
+```{r, fig.width=20, fig.height=12, warning=FALSE, message=FALSE, echo=FALSE}
+
 load(url(
   "https://www.stat.osu.edu/~vqv/4194/data/masters2011-untidy.rda"
 ))
-```
 
-```{r, fig.width=20, fig.height=12, warning=FALSE, message=FALSE}
 # Binds the rows of round1, round2,round3, and round4; specifies the name of the new column that will be created to store the source of each row in the resulting data frame, rounds
 rounds <- bind_rows(round1, round2, round3, round4, .id = "round")
 
@@ -476,14 +480,14 @@ ggplot(performance) +
 
 # ______________________________________________________________________________
 
-# NFL 2023 QB Performance Project
+## 2. NFL 2023 QB Performance Analysis
 
 
 ### Overall QB Performance:
 
- I created a spreadsheet of all the NFL Quarterbacks that played a minimum of one game in the 2023-2024 season and compiled all of their advanced statistics. I then developed a formula in Excel aiming to grade their efficiency, MVP rating, and overall grade, and transferred the file into R to visualize my findings. The name displayed is my MVP according to my grading system and efficiency formula
+I'm a big NFL fan, and often times I see many people debating which QB performed the best in a season, or who deserves the MVP. As a result, I created a spreadsheet of all the NFL Quarterbacks that played a minimum of one game in the 2023-2024 season and compiled all of the QB's advanced statistics. I then developed a formula in Excel aiming to grade their efficiency, MVP rating, and overall grade using a variety of performance metrics, and transferred the file into R to visualize my findings. The name displayed is my MVP according to my grading system and efficiency formula
 
-```{r, fig.width=12, warning=FALSE, message=FALSE}
+```{r, fig.width=12, warning=FALSE, message=FALSE, echo=FALSE}
 qbdata <- read_excel("C:\\Users\\ajcon\\Downloads\\Portfolio\\qbdata.xlsx")
 
 mvp <- qbdata %>% 
@@ -501,7 +505,7 @@ ggplot(qbdata, aes(x = Efficiency, y = Grade, col = QB)) +
 
 ### QB Performance by Team:
 
-```{r, fig.width=20, fig.height=15}
+```{r, fig.width=20, fig.height=15, echo=FALSE}
 ggplot(qbdata, aes(x = Efficiency, y = Grade)) +
   geom_point() +
   geom_text(aes(label = QB), nudge_x = 0, nudge_y = -0.05) +
@@ -509,9 +513,10 @@ ggplot(qbdata, aes(x = Efficiency, y = Grade)) +
   labs(x = "Efficiency", y = "Grade", title = "Quarterback Performance by Team")
 ```
 
+
 # ______________________________________________________________________________
 
-# A Data-led Look into the History of the Olympics
+## 3. A Data-led Look into the History of the Olympics
 
  After gaining access to mulitple datasets of the Olympics containing every instance throughout every competition since the inaugural season back in 1896 (Greece) up until the 2016 Games in Brazil, I decided my free time would be well spent answering a couple of questions I, like many others (I think), have been wondering:
 
@@ -523,36 +528,40 @@ ggplot(qbdata, aes(x = Efficiency, y = Grade)) +
 
 Below are the results I found for the first question, along with the code I wrote to filter and manipulate the data so I can visualize it in a more effective manner.
 
-```{r, message=FALSE}
+```{r, message=FALSE, echo=FALSE}
 athlete_events <- read_csv(
    file = 'athlete_events.csv',
    col_types = cols(ID = 'i', Age = 'i', Height = 'i', Year = 'i')
 )
 
+# Creating a function to make the gapminer and olympics data compatible
 nearest_year <- function(olympics_year) {
   gapminder_year <- seq(1952, 2007, by = 5)
   nearest_year <- gapminder_year[which.min(abs(olympics_year - gapminder_year))]
   return(nearest_year)
-}
+} 
 
-olympics_data <-
-  athlete_events %>%
+olympics_data_medals_won <- athlete_events %>%
   filter(!is.na(Medal)) %>%
   count(Games, Event, NOC, Medal, Team, Year, Name) %>%
   mutate(year = nearest_year(Year))
 
+olympics_data_athletes_sent <- athlete_events %>%
+  count(Games, Event, NOC, Medal, Team, Year, Name) %>%
+  mutate(year = nearest_year(Year))
+
 country_money <- gapminder %>%
+  filter(gdpPercap < 80000) %>% 
   group_by(country) %>%
   select(country, year, gdpPercap)
 
+athletes_by_country_year <- olympics_data_athletes_sent %>%
+ group_by(Team, Year) %>%
+  summarise(Total_Athletes = n(), .groups = 'drop')
 
-athletes_by_country_year <- olympics_data %>%
-  group_by(Team, Year) %>%
-  summarise(Total_Athletes = n_distinct(Name), .groups = 'drop')
-
-medals_by_country_year <- olympics_data %>%
-  group_by(Team, Year) %>%
-  summarise(Total_Medals = n_distinct(Medal), .groups = 'drop')
+medals_by_country_year <- olympics_data_medals_won %>%
+  group_by(Team, Year) %>% 
+  summarise(Total_Medals = n(), .groups = 'drop')
 
 joined_data_athletes <- inner_join(athletes_by_country_year, country_money, by = c("Year" = "year", "Team" = "country")) %>%
   filter(!is.na(gdpPercap))
@@ -589,7 +598,7 @@ data <- full_join(athlete_events, host_cities, by = "City")
 
 For the second question... I started by joining data sets together and creating a function that will filter the joint dataset for each country and in each of the seasons: determine whether they hosted or not. The function also displays a plot to compare the amount of medals that country won when they hosted vs when they did not. We will then compare and draw reasonable conclusions by creating a histogram containing the average number of medals all countries combined have won when they host vs in the competitions before.
 
-```{r}
+```{r, echo=FALSE}
 generate_country_medals_plot <- function(country_code, country_name, summer_hosts, winter_hosts) {
  
   # SUMMER
@@ -706,7 +715,7 @@ yugoslavia_plots
 
 As stated earlier, I created a histogram of the difference of medals **(by subtracting the medals won when they host minus the medals won in the olympic season directly prior)** to draw a reasonable conclusion.
 
-```{r}
+```{r, echo=FALSE}
 hist_data <- tibble(
   NOC = c("USA", "AUS", "AUT", "BEL", "BRA", "CAN", "CHN", "FIN", "FRA", "GER", "GRE", "ITA", "JPN", "MEX", "NED", "NOR", "RUS", "KOR", "ESP", "SWE", "SUI", "GBR", "YUG"),
   Medals_Won_Host = c(451, 83, 13, 33, 18, 39, 85, 22, 109, 102, 45, 47, 36, 9, 22, 29, 130, 30, 22, 64, 9, 165, 1),
@@ -720,6 +729,4 @@ hist(new$Distribution_difference, xlab = "Difference between Medals (Host Season
 
 > We can see there is a positive host effect country on the amount of medals won when a country hosts the olympics vs when they don't because there is an overall positive difference.
 
-# ______________________________________________________________________________
-
-#### I am also currently in the process of completing my seventh project - Developing 2 more models to predict the if a patient has Alzheimers, and predicting the champion of the Premier League next season.
+## I hope my findings have been as interesting to you as they were to me !
