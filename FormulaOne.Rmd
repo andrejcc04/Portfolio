@@ -132,7 +132,7 @@ confusion_matrix
 # False Positive: Model incorrectly predicts driver didn't win, when they did (7)
 # True Negative: Model correctly predicts a driver won the race (7)
 # False Negative: Model incorrectly predicts a driver won race when they didn't (2)
-balanced_accuracy <- confusion_matrix$byClass["Balanced Accuracy"]
+accuracy <- confusion_matrix$overall["Accuracy"]
 
 # PRECISION = 158 / (158+7) = 0.958
 precision <- confusion_matrix$byClass["Pos Pred Value"]
@@ -157,7 +157,7 @@ summary <- data.frame(
 # STEP 5: VISUALIZE RESULTS
 metrics_df <- data.frame(
   Metric = c("Accuracy", "Precision", "Recall", "Specificity", "F1 Score"),
-  Value = c(balanced_accuracy, precision, recall, specificity, f1score)
+  Value = c(accuracy, precision, recall, specificity, f1score)
 )
 
 ggplot(metrics_df, aes(x = Metric, y = Value, fill = Metric)) +
