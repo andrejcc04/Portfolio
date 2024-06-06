@@ -19,36 +19,40 @@ Does hosting the olympics correlate to winning more medals that year?
 
 Below are the results I found for the first question, along with the code I wrote to filter and manipulate the data so I can visualize it in a more effective manner.
 
-```{r, message=FALSE}
+```{r, message=FALSE, echo=FALSE}
 athlete_events <- read_csv(
    file = 'athlete_events.csv',
    col_types = cols(ID = 'i', Age = 'i', Height = 'i', Year = 'i')
 )
 
+# Creating a function to make the gapminer and olympics data compatible
 nearest_year <- function(olympics_year) {
   gapminder_year <- seq(1952, 2007, by = 5)
   nearest_year <- gapminder_year[which.min(abs(olympics_year - gapminder_year))]
   return(nearest_year)
-}
+} 
 
-olympics_data <-
-  athlete_events %>%
+olympics_data_medals_won <- athlete_events %>%
   filter(!is.na(Medal)) %>%
   count(Games, Event, NOC, Medal, Team, Year, Name) %>%
   mutate(year = nearest_year(Year))
 
+olympics_data_athletes_sent <- athlete_events %>%
+  count(Games, Event, NOC, Medal, Team, Year, Name) %>%
+  mutate(year = nearest_year(Year))
+
 country_money <- gapminder %>%
+  filter(gdpPercap < 80000) %>% 
   group_by(country) %>%
   select(country, year, gdpPercap)
 
+athletes_by_country_year <- olympics_data_athletes_sent %>%
+ group_by(Team, Year) %>%
+  summarise(Total_Athletes = n(), .groups = 'drop')
 
-athletes_by_country_year <- olympics_data %>%
-  group_by(Team, Year) %>%
-  summarise(Total_Athletes = n_distinct(Name), .groups = 'drop')
-
-medals_by_country_year <- olympics_data %>%
-  group_by(Team, Year) %>%
-  summarise(Total_Medals = n_distinct(Medal), .groups = 'drop')
+medals_by_country_year <- olympics_data_medals_won %>%
+  group_by(Team, Year) %>% 
+  summarise(Total_Medals = n(), .groups = 'drop')
 
 joined_data_athletes <- inner_join(athletes_by_country_year, country_money, by = c("Year" = "year", "Team" = "country")) %>%
   filter(!is.na(gdpPercap))
