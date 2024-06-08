@@ -1,5 +1,5 @@
 ---
-title: "Project Portfolio"
+title: "Project Vault"
 author: "Andre Contreras"
 date: "2023-2024"
 output:   
@@ -42,6 +42,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 # General
 library(ggplot2) # used to plot
 library(dplyr) # Used to manipulate, clean, filter data
+library(broom)
 
 # For F1 SVM/GB/RF Models
 library(randomForest) # Machine Learning RF Model (Classification & Regression)
@@ -68,12 +69,13 @@ library(countrycode)
 
 # **Machine Learning Models**
 
+## 1. Ensemble Methods Model to predict **Race Winner**
+
   As I was watching the 2024 Monaco Grand Prix- I wondered how hard it would be to build a Machine Learning model that could (somewhat) successfully predict the winner of the races to come, so I got to work and after a couple of days of trial and error I managed to build a model. 
   I started off with just a Random Forest Classification model, but it wasn't giving me the results I wanted. Therefore, I figured I should create 3 different classification models (Support Vector Machine, Random Forest, and Gradient Boosting) to then combine them all in this Ensemble Methods model and see if that got me more precise results... It did!
 
 **P.S I was also able to build a model to predict X driver's lap time on lap Y in the circuit Z, but that html output alone is bigger than this one so I might just keep it in a separate html:** ***https://rpubs.com/andrejcc/1192931***
 
-## 1. Ensemble Methods Model to predict **Race Winner**
 ```{r, echo=FALSE}
 races <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/races.csv", na.strings = "\\N")
 lap_times <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/lap_times.csv", na.strings = "\\N")
@@ -270,6 +272,7 @@ predictions <- predict(model, newdata = testing_data)
 # Evaluate performance using Root Mean Square Error
 rmse <- sqrt(mean((testing_data$Close - predictions)^2))
 cat("Root Mean Squared Error: $", round(rmse, 2))
+#summary(model) # We know the model is perfect when Median = 0 and absolute values of 1q = 3q
 
 # Plot
 ggplot(testing_data, aes(Date-19500, Close)) +
@@ -307,7 +310,6 @@ data <- read_csv("USA_Housing_Data.csv")
 
 # Changing the name of the variables I will use that have spaces because R doesn't like spaces so it will allow for smoother data manipulation.
 names(data)[names(data) == "Living Space"] <- "Living_Space"
-names(data)[names(data) == "Median Household Income"] <- "Median_Household_Income"
 
 # Assigning a unique numeric identifier for each state in the data to put in the lm() regression model (since it doesn't accept categorical variables when creating the formula)
 data$State <- factor(data$State)
@@ -316,39 +318,26 @@ data$State_numeric <- as.integer(data$State)
   # 1A: Removing Missing Values
   clean_data <- na.omit(data)
 
-  # 1B: Calculate Z-scores for each variable to detect and remove outliers
+  # 1B: Remove outliers
   z_scores <- scale(clean_data$Price)
-  outliers <- which(abs(z_scores) > 2)
-  
-  z_scores_beds <- scale(clean_data$Beds)
-  outliers_beds <- which(abs(z_scores_beds) > 2)
-  
-  z_scores_baths <- scale(clean_data$Baths)
-  outliers_baths <- which(abs(z_scores_baths) > 2)
-  
-  z_scores_space <- scale(clean_data$Living_Space)
-  outliers_space <- which(abs(z_scores_space) > 2)
+  outliers <- which(abs(z_scores) > 0.5)
+
+  outliers_beds <- which(clean_data$Beds > 12)
+
+  outliers_baths <- which(clean_data$Baths > 12)
+
+  outliers_space <- which(clean_data$Living_Space < 100 | clean_data$Living_Space > 9999)
 
   # 1C: Filtering the data so it's ready for modelling
-  clean_data <- clean_data %>% 
-    filter(!Price %in% clean_data$Price[outliers]) %>% 
-    filter(!Beds %in% clean_data$Beds[outliers_beds]) %>% 
-#    filter(!Baths %in% clean_data$Baths[outliers_baths]) %>% 
-#    filter(!Living_Space %in% clean_data$Living_Space[outliers_space]) %>%
+  clean_data <- clean_data %>%
+    filter(!Price %in% clean_data$Price[outliers]) %>%
+    filter(!Beds %in% clean_data$Beds[outliers_beds]) %>%
+    filter(!Baths %in% clean_data$Baths[outliers_baths]) %>%
+    filter(!Living_Space %in% clean_data$Living_Space[outliers_space]) %>%
     select(Price, Beds, Baths, Living_Space, State, State_numeric)
 
-  
-# ---------- ONLY READ AFTER COMPLETING REGRESSION IN R DATACAMP COURSE ----------
-  
-#clean_data$State <- factor(clean_data$State)
-# Since, State is a categorical variable, and lm() only accepts numeric variables be used in determining the model formula, we need to convert it to factors.
 
-#dummy_vars <- model.matrix(~ State - 1, data = clean_data)
-#clean_data <- cbind(clean_data, dummy_vars) 
-# Since categorical variable has more than 2 levels, we need to encode it into dummy(placeholder) variables.
-# ----------------------------------------------------------------------------
-  
-# Step 2: Separate into 2 datasets (Training & Testing)
+  # Step 2: Separate into 2 datasets (Training & Testing)
 split <- createDataPartition(clean_data$Price, p = 0.98, list = FALSE)
 
 training_data <- clean_data[split, ]
@@ -380,7 +369,7 @@ ggplot(testing_data, aes(x = Living_Space, y = Price)) +
 #   labs(x = "Number of Beds", y = "Price ($)", title = "Linear Regression Model Prediction for Price of Houses") +
 #   scale_y_continuous(labels = scales::comma, breaks = seq(500000, 3000000, by = 500000)) +
 #   scale_x_continuous(breaks = seq(1, 7, by = 1))
-# 
+#
 # ggplot(testing_data, aes(x = Baths, y = Price)) +
 #   geom_point() +
 #   geom_smooth(method = "lm") +
@@ -400,8 +389,8 @@ ggplot(testing_data, aes(x = State_Abbreviation, y = Price)) +
   scale_y_continuous(labels = scales::comma, breaks = seq(500000, 3000000, by = 500000))
 
 
-plot(testing_data$Price, predictions, 
-     xlab = "Observed", ylab = "Predicted", 
+plot(testing_data$Price, predictions,
+     xlab = "Observed", ylab = "Predicted",
      main = "Observed vs. Predicted Values",
      col = "black")
 # Red "Perfect" Line
@@ -423,9 +412,9 @@ if (params$state %in% unique(clean_data$State)) {
   # Converting state input to its corresponding numeric identifier
   State_numeric <- clean_data$State_numeric[match(params$state, clean_data$State)]
   user_input$State_numeric <- State_numeric
-  
+
   predicted_price <- predict(model, newdata = user_input)
-  
+
   cat("Predicted price of a house in", params$state, "with", params$num_beds, "beds,", params$num_baths, "baths, and a living space of", params$living_space, "sqft: $", round(predicted_price, 2))
 } else {
   stop("Unfortunately, we do not have a record of homes in your state, thus we cannot provide a prediction on the price of your house.")
@@ -485,30 +474,38 @@ ggplot(performance) +
 
 ### Overall QB Performance:
 
-I'm a big NFL fan, and often times I see many people debating which QB performed the best in a season, or who deserves the MVP. As a result, I created a spreadsheet of all the NFL Quarterbacks that played a minimum of one game in the 2023-2024 season and compiled all of the QB's advanced statistics. I then developed a formula in Excel aiming to grade their efficiency, MVP rating, and overall grade using a variety of performance metrics, and transferred the file into R to visualize my findings. The name displayed is my MVP according to my grading system and efficiency formula
+I'm a big NFL fan, and often times I see many people debating which QB performed the best in a season, or who deserves the MVP. As a result, I created a spreadsheet of all the NFL Quarterbacks that played a minimum of 100 snaps in the 2023-2024 season, compiling advanced statistics with the help of Pro Football Reference (https://www.pro-football-reference.com/). Using this data, I developed a formula in Excel to grade their efficiency, MVP rating, and overall performance, and then transferred the file into R to visualize my findings. The names displayed are my MVP Finalists according to my grading system, efficiency formula, and overall MVP Ratings.
+
+(If you're interesting in which performance metrics I used or how I measured the overall Performance feel free to check out my dataset on my GitHub)
 
 ```{r, fig.width=12, warning=FALSE, message=FALSE, echo=FALSE}
-qbdata <- read_excel("C:\\Users\\ajcon\\Downloads\\Portfolio\\qbdata.xlsx")
+qbdata <- read_csv("C:\\Users\\ajcon\\Downloads\\Portfolio\\qbdata.csv")
 
-mvp <- qbdata %>% 
-  top_n(1, qbdata$Grade*qbdata$Efficiency)
+filtered_qbdata <- qbdata %>% 
+  filter(TotSnaps > 100)
 
-ggplot(qbdata, aes(x = Efficiency, y = Grade, col = QB)) +
+mvp_finalists <- filtered_qbdata %>% 
+  top_n(5, filtered_qbdata$MVP_Rating)
+
+ggplot(filtered_qbdata, aes(x = Efficiency, y = Grade, col = Player)) +
   geom_point() +
-  geom_label_repel(data = mvp, aes(label = QB), nudge_x = -0.001, nudge_y = -0.05, segment.color = "black", segment.size = 0.5) +
-  labs(x = "Weighted Efficiency Scale", y = "Grading Scale", title = "Overall QB Performance 2023 NFL Season") +
+  geom_label_repel(data = mvp_finalists, aes(label = Player), nudge_x = -0.001, nudge_y = -0.05, segment.color = "black", segment.size = 0.5) +
+  labs(x = "Weighted Efficiency Scale", y = "Grading Scale", title = "Overall QB Performance 2023-2024 NFL Season") +
   theme_minimal() +
   theme(legend.position = "right")
 
 ```
 
+> As we can see, my MVP rating suggests that the 5 MVP Finalists be the named above. When comparing it to the real life finalists, only Jared Goff was not included (replaced by Christian McCaffrey).
 
-### QB Performance by Team:
+> Note: In case you were wondering why the 2nd and 3rd highest Grade datapoints (Jake Browning & Kirk Cousins) were not considered an MVP candidate, it is because the formula that quantifies a player's mvp rating incorporates the player's total amount of snaps, and wins. Both of these players played less than half a season. 
+
+## QB Performance by Team
 
 ```{r, fig.width=20, fig.height=15, echo=FALSE}
-ggplot(qbdata, aes(x = Efficiency, y = Grade)) +
+ggplot(filtered_qbdata, aes(x = Efficiency, y = Grade)) +
   geom_point() +
-  geom_text(aes(label = QB), nudge_x = 0, nudge_y = -0.05) +
+  geom_text(aes(label = Player), nudge_x = 0, nudge_y = -0.05) +
   facet_wrap(. ~ Team) +
   labs(x = "Efficiency", y = "Grade", title = "Quarterback Performance by Team")
 ```
