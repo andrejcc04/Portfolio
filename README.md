@@ -13,7 +13,8 @@ This project portfolio covers a diverse range of data analytics, data science, a
 - Objective: Evaluate the performance of NFL quarterbacks during the 2023-2024 season.
 - Approach: Compiled advanced statistics of quarterbacks, developed a grading system, and identified the MVP.
 - Techniques: Data analysis, feature engineering, statistical modeling, and data visualization using ggplot2.
-- **Where to find:** NFL 2023 QB Analysis.Rmd, Portfolio.Rmd (Data I created and used can be found in qbdata.xlsx)
+- **Where to find:** NFL 2023 QB Analysis.Rmd, Portfolio.Rmd (Data I created and used can be found in qbdata.csv)
+  Disclaimer: Original data came from Pro Football Reference - I created and added Formulas for Grade, Efficiency, and MVP_Rating
   
 ### 3. A Data-led Look into the History of the Olympics
 - Objective: Investigate the relationship between a country's economic stability, Olympic performance, and the impact of hosting the Olympics.
