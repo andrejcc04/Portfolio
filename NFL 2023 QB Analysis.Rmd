@@ -2,7 +2,7 @@
 title: "NFL 2023 QB Analysis"
 author: "Andre Contreras"
 date: "2023-11-20"
-output: html_document
+output: prettydoc::html_pretty
 ---
 
 ```{r setup, include=FALSE}
@@ -12,6 +12,7 @@ library(ggplot2)
 library(dplyr)
 library(readxl)
 library(ggrepel)
+library(readr)
 ```
 
 # NFL 2023 QB Performance Project
@@ -20,27 +21,33 @@ library(ggrepel)
 ## Overall QB Performance:
 
 ```{r, fig.width=12, warning=FALSE, message=FALSE}
-qbdata <- read_excel("C:\\Users\\ajcon\\Downloads\\Portfolio\\qbdata.xlsx")
+qbdata <- read_csv("C:\\Users\\ajcon\\Downloads\\Portfolio\\qbdata.csv")
 
-mvp <- qbdata %>% 
-  top_n(1, qbdata$Grade*qbdata$Efficiency)
+filtered_qbdata <- qbdata %>% 
+  filter(TotSnaps > 100)
 
-ggplot(qbdata, aes(x = Efficiency, y = Grade, col = QB)) +
+mvp_finalists <- filtered_qbdata %>% 
+  top_n(5, filtered_qbdata$MVP_Rating)
+
+ggplot(filtered_qbdata, aes(x = Efficiency, y = Grade, col = Player)) +
   geom_point() +
-  geom_label_repel(data = mvp, aes(label = QB), nudge_x = -0.001, nudge_y = -0.05, segment.color = "black", segment.size = 0.5) +
-  labs(x = "Weighted Efficiency Scale", y = "Grading Scale", title = "Overall QB Performance 2023 NFL Season") +
+  geom_label_repel(data = mvp_finalists, aes(label = Player), nudge_x = -0.001, nudge_y = -0.05, segment.color = "black", segment.size = 0.5) +
+  labs(x = "Weighted Efficiency Scale", y = "Grading Scale", title = "Overall QB Performance 2023-2024 NFL Season") +
   theme_minimal() +
   theme(legend.position = "right")
 
 ```
 
+> As we can see, my MVP rating suggests that the 5 MVP Finalists be the named above. When comparing it to the real life finalists, only Jared Goff was not included (replaced by Christian McCaffrey).
+
+> Note: In case you were wondering why the 2nd and 3rd highest Grade datapoints (Jake Browning & Kirk Cousins) were not considered an MVP candidate, it is because the formula that quantifies a player's mvp rating incorporates the player's total amount of snaps, and wins. Both of these players played less than half a season. 
 
 ## QB Performance by Team
 
 ```{r, fig.width=20, fig.height=15}
-ggplot(qbdata, aes(x = Efficiency, y = Grade)) +
+ggplot(filtered_qbdata, aes(x = Efficiency, y = Grade)) +
   geom_point() +
-  geom_text(aes(label = QB), nudge_x = 0, nudge_y = -0.05) +
+  geom_text(aes(label = Player), nudge_x = 0, nudge_y = -0.05) +
   facet_wrap(. ~ Team) +
   labs(x = "Efficiency", y = "Grade", title = "Quarterback Performance by Team")
 ```
