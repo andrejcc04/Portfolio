@@ -1,7 +1,7 @@
 ---
 title: "Formula 1 Lap Time Prediction and Evaluation"
 author: "Andre Contreras"
-date: "5/31/2024"
+date: ""
 output: 
   prettydoc::html_pretty:
     theme: tactile
@@ -21,7 +21,7 @@ params:
   circuitId_isWinner:
     label: "Enter the track's circuitId"
     input: text
-    value: 7
+    value: 4
   year_isWinner:
     label: "Enter any year after 2021"
     input: text
@@ -30,7 +30,7 @@ params:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-
+# Date: 5/31/2024
 library(readr)
 library(caret) # Confusion Matrix
 library(dplyr)
@@ -41,8 +41,9 @@ library(e1071) # Machine Learning SVM Model (Classification)
 library(gbm) # Machine Learning GB Model (Classification)
 ```
 
-# Ensemble Methods Model to predict RACE WINNER
+
 ```{r, include=FALSE}
+# Ensemble Methods Model to predict RACE WINNER
 races <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/races.csv", na.strings = "\\N")
 lap_times <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/lap_times.csv", na.strings = "\\N")
 results <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/results.csv", na.strings = "\\N")
@@ -66,7 +67,7 @@ f1data <- na.omit(f1data) %>%
   mutate(grid = ifelse(grid == 0, 21, grid)) %>%
   select(-position)
 
-set.seed(123)
+set.seed(100)
 
 f1data$isWinner <- as.factor(f1data$isWinner) # only 2 levels -- true and false so classification
 
@@ -200,6 +201,11 @@ circuit <- unique(races$name[races$circuitId == params$circuitId_isWinner])
 cat("Predicted Winner of the", params$year_isWinner, circuit, ":", name, lastname)
 ```
 
+#### This project I did focuses on trying to predict a driver's laptime on __ lap in the _____ Grand Prix using a linear regression model I created for that race. The first section is the pre-race predictions, which contains the prediction of the lap 30 time of Sergio Perez in every race of the 2024 F1 season, along with the Root Mean Squared Error of the model's testing predictions. The second section is the post-race analysis, which evaluates the predicted laptime of that race's lap and outputs the difference. It also displays informative plots summarizing the race.
+
+(The default driver is Sergio Perez, default lap is 30. I still need to implement user interface in this page so that it takes the driver, lap, circuit you want to test and output the predicted lap time)
+
+**The code I used for this project can be found in my GitHub Repository:** ***https://github.com/andrejcc04/Portfolio/blob/main/FormulaOne.Rmd***
 
 # _______________________________________________________________________________
 
@@ -215,6 +221,7 @@ driver_standings <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/driv
 qualifying <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/qualifying.csv", na.strings = "\\N")
 status <- read.csv("/Users/ajcon/Downloads/Portfolio/F1 Race Data/status.csv", na.strings = "\\N")
 
+
 # Join data sets
 lap_times <- left_join(lap_times, races, by = "raceId")
 lap_times <- left_join(lap_times, circuits, by = "circuitId")
@@ -226,6 +233,68 @@ convert_to_time <- function(milliseconds) {
   seconds <- floor((milliseconds %% (1000 * 60)) / 1000)
   milliseconds <- milliseconds %% 1000
   return(paste(minutes, seconds, round(milliseconds, 0), sep = ":"))
+}
+
+# Function that outputs three relavant plots for post-race analysis
+postrace_plots <- function(race) {
+  driver_colors <- c(
+    "VER" = "#00144A",
+    "PER" = "#00144A",
+    "LEC" = "#EF1A2D",
+    "SAI" = "#EF1A2D",
+    "BEA" = "#EF1A2D",
+    "NOR" = "#FF8000",
+    "PIA" = "#FF8000",
+    "HAM" = "#00A19B",
+    "RUS" = "#00A19B",
+    "ALO" = "#002420",
+    "STR" = "#002420",
+    "GAS" = "#2173B8",
+    "OCO" = "#2173B8",
+    "TSU" = "blue",
+    "RIC" = "blue",
+    "MAG" = "#E6002B",
+    "HUL" = "#E6002B",
+    "ALB" = "#00A0DE",
+    "SAR" = "#00A0DE",
+    "BOT" = "#52E252",
+    "ZHO" = "#52E252"
+  )
+  
+  plot_data <- lap_times %>% 
+    filter(raceId == race) %>% 
+    filter(milliseconds < 200000) %>% 
+    select(lap, position, milliseconds, code, name)
+  
+  plot1 <- ggplot(plot_data, aes(x = milliseconds, y = code, fill = code)) +
+    geom_boxplot(show.legend = FALSE) +
+    labs(title = paste("Boxplot of Lap Times by Driver in", plot_data$name),
+         x = "Laptime (milliseconds)",
+         y = "Driver") +
+    scale_fill_manual(values = driver_colors)
+  
+  label_data <- plot_data %>% 
+    group_by(code) %>% 
+    filter(lap == max(lap)) %>% 
+    ungroup()
+    
+  plot2 <- ggplot(plot_data) +
+    geom_line(aes(x = lap, y = position, col = code), show.legend = FALSE) +
+    geom_text(data = label_data, aes(x = lap, y = position, label = code, col = code), hjust = -0.3, vjust = 0.5, show.legend = FALSE) +
+    labs(x = "Lap", y = "Position", title = paste("Driver Positions by Lap in the", plot_data$name)) +
+    scale_x_continuous(breaks = seq(1, max(plot_data$lap), by = 1)) +
+    scale_y_reverse(breaks = seq(1, 20, by = 1)) +
+    scale_color_manual(values = driver_colors)
+  
+  plot_data$lap <- factor(plot_data$lap, levels = unique(plot_data$lap))
+  
+  plot3 <- ggplot(plot_data, aes(x = milliseconds, y = lap)) +
+    geom_boxplot() +
+    labs(title = paste("Boxplot of Lap Times by Lap in", plot_data$name),
+         x = "Laptime (milliseconds)",
+         y = "Lap")
+  
+  return(list(plot1, plot2, plot3))
 }
 ```
 
@@ -631,9 +700,9 @@ user_input = data.frame("driverId" = params$driver, "lap" = params$lap, "year" =
 user_input = left_join(user_input, drivers, by = "driverId") %>% 
   select(driverId, lap, year, forename, surname, code)
 
-predicted_laptime <- predict(model, newdata = user_input)
+canada_predicted_laptime <- predict(model, newdata = user_input)
 
-predicted_laptime_adjusted <- convert_to_time(predicted_laptime)
+predicted_laptime_adjusted <- convert_to_time(canada_predicted_laptime)
   
 cat("Predicted lap time of", user_input$forename, user_input$surname, "on lap", user_input$lap, "in the", user_input$year, "Canadian Grand Prix:", predicted_laptime_adjusted)
 cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
@@ -1336,7 +1405,7 @@ cat("Root Mean Squared Error:", round(rmse,0), "milliseconds")
 # Post-Race Data Analysis
 
 ## 2024 Bahrain Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=12}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Bahrain Grand Prix")
 
@@ -1344,7 +1413,8 @@ user_input = left_join(user_input, drivers, by = "driverId") %>%
   select(driverId, lap, year, forename, surname, code, name)
 
 bahrain_join <- lap_times %>%
-  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%
+  select(driverId, milliseconds, circuitId, location, name)
 
 comparison <- user_input %>%
   mutate(bahrain_predicted_laptime)
@@ -1356,25 +1426,11 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
 
-bahrain_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 3)
-
-ggplot(bahrain_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Bahrain Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-bahrain_plot_data$lap <- factor(bahrain_plot_data$lap, levels = unique(bahrain_plot_data$lap))
-ggplot(bahrain_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Bahrain Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1121)
 ```
 
 ## 2024 Saudi Arabian Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=12}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Saudi Arabian Grand Prix")
 
@@ -1394,25 +1450,11 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
 
-saudi_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 77)
-
-ggplot(saudi_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Saudi Arabian Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-saudi_plot_data$lap <- factor(saudi_plot_data$lap, levels = unique(saudi_plot_data$lap))
-ggplot(saudi_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Saudi Arabian Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1122)
 ```
 
 ## 2024 Australian Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=12}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Australian Grand Prix")
 
@@ -1432,25 +1474,11 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
 
-australia_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 1)
-
-ggplot(australia_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Australian Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-australia_plot_data$lap <- factor(australia_plot_data$lap, levels = unique(australia_plot_data$lap))
-ggplot(australia_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Australian Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1123)
 ```
 
 ## 2024 Japanese Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=12}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Japanese Grand Prix")
 
@@ -1470,25 +1498,11 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
 
-japan_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 22 & milliseconds < 500000)
-
-ggplot(japan_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Japanese Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-japan_plot_data$lap <- factor(japan_plot_data$lap, levels = unique(japan_plot_data$lap))
-ggplot(japan_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Japanese Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1124)
 ```
 
 ## 2024 Chinese Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=12}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Chinese Grand Prix")
 
@@ -1508,25 +1522,11 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds (Safety Car lap 21-31)")
 
-china_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 17 & milliseconds < 200000)
-
-ggplot(china_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Chinese Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-china_plot_data$lap <- factor(china_plot_data$lap, levels = unique(china_plot_data$lap))
-ggplot(china_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Chinese Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1125)
 ```
 
 ## 2024 Miami Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=12}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Miami Grand Prix")
 
@@ -1546,25 +1546,11 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds (Safety Car lap 28-32)")
 
-miami_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 79)
-
-ggplot(miami_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Miami Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-miami_plot_data$lap <- factor(miami_plot_data$lap, levels = unique(miami_plot_data$lap))
-ggplot(miami_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Miami Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1126)
 ```
 
 ## 2024 Emilia-Romagna Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=12}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Emilia Romagna Grand Prix")
 
@@ -1584,25 +1570,11 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds")
 
-imola_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 21 & milliseconds < 150000)
-
-ggplot(imola_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Imola Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-imola_plot_data$lap <- factor(imola_plot_data$lap, levels = unique(imola_plot_data$lap))
-ggplot(imola_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Imola Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1127)
 ```
 
 ## 2024 Monaco Grand Prix Post-Race Analysis and Evaluation
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.width=14}
 # Must run pre-race prediction r chunk prior to running this one!
 user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Monaco Grand Prix")
 
@@ -1622,21 +1594,30 @@ comparison
 
 cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds (Crashed out lap 1)")
 
-monaco_plot_data <- lap_times %>% 
-  filter(year == 2024 & circuitId == 6 & milliseconds < 250000)
-
-ggplot(monaco_plot_data, aes(x = milliseconds, y = code, fill = code), ) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(title = "Boxplot of Lap Times by Driver in Monaco Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Driver")
-
-monaco_plot_data$lap <- factor(monaco_plot_data$lap, levels = unique(monaco_plot_data$lap))
-ggplot(monaco_plot_data, aes(x = milliseconds, y = lap)) +
-  geom_boxplot() +
-  labs(title = "Boxplot of Lap Times by Lap in Monaco Grand Prix",
-       x = "Laptime (milliseconds)",
-       y = "Lap")
+postrace_plots(race = 1128)
 ```
 
 ## 2024 Canadian Grand Prix Post-Race Analysis and Evaluation
+```{r, echo=FALSE, fig.width=13}
+# Must run pre-race prediction r chunk prior to running this one!
+user_input <-  data.frame("driverId" = params$driver, "lap" = params$lap, "year" = params$year, "name" = "Canadian Grand Prix")
+
+user_input = left_join(user_input, drivers, by = "driverId") %>% 
+  select(driverId, lap, year, forename, surname, code, name)
+
+canada_join <- lap_times %>%
+  filter(year == params$year & driverId == params$driverId & lap == params$lap) %>%   select(driverId, milliseconds, circuitId, location, name)
+
+comparison <- user_input %>%
+  mutate(canada_predicted_laptime)
+
+comparison <- left_join(comparison, canada_join, by = "name") %>%
+  select(forename, surname, year, name, lap, canada_predicted_laptime, milliseconds) %>%
+  rename("Predicted Laptime" = canada_predicted_laptime, "Actual Laptime" = milliseconds)
+comparison
+
+cat("Off by", abs(comparison$`Predicted Laptime` - comparison$`Actual Laptime`), "milliseconds (Rain)")
+
+postrace_plots(race = 1129)
+```
+
