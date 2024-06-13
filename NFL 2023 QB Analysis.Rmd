@@ -13,6 +13,8 @@ library(dplyr)
 library(readxl)
 library(ggrepel)
 library(readr)
+library(caret)
+library(fmsb) # Radar Graph
 ```
 
 # NFL 2023 QB Performance Project
@@ -21,7 +23,7 @@ library(readr)
 ## Overall QB Performance:
 
 ```{r, fig.width=12, warning=FALSE, message=FALSE}
-qbdata <- read_csv("C:\\Users\\ajcon\\Downloads\\Portfolio\\qbdata.csv")
+qbdata <- read_excel("C:\\Users\\ajcon\\Downloads\\Portfolio\\NFL Projects\\qbdata.xlsx")
 
 filtered_qbdata <- qbdata %>% 
   filter(TotSnaps > 100)
@@ -36,6 +38,7 @@ ggplot(filtered_qbdata, aes(x = Efficiency, y = Grade, col = Player)) +
   theme_minimal() +
   theme(legend.position = "right")
 
+# make a linear regression model to predict the number of mvp points a qb gets, whoever has the most points wins mvp
 ```
 
 > As we can see, my MVP rating suggests that the 5 MVP Finalists be the named above. When comparing it to the real life finalists, only Jared Goff was not included (replaced by Christian McCaffrey).
@@ -52,3 +55,51 @@ ggplot(filtered_qbdata, aes(x = Efficiency, y = Grade)) +
   labs(x = "Efficiency", y = "Grade", title = "Quarterback Performance by Team")
 ```
 
+
+## Radar Charts
+```{r, fig.width=15, fig.height=12}
+max <- data.frame(
+  CmpPct = 0.705,
+  YdsperGame = 300, #325
+  TDperGame = 3,
+  TOperGame = 0,
+  BadThrperGame = 0,
+  OnTgtperGame = 30,
+  PktTime = 3.0 #3.2
+)
+
+min <- data.frame(
+  CmpPct = 0.6,
+  YdsperGame = 0,
+  TDperGame = 0,
+  TOperGame = 2.5,
+  BadThrperGame = 7,
+  OnTgtperGame = 0,
+  PktTime = 0
+)
+
+radar_data <- filtered_qbdata %>%
+  filter(ID %in% c(1, 2)) %>%
+  select(CmpPct, YdsperGame, TDperGame, TOperGame, BadThrperGame, OnTgtperGame, PktTime)
+
+radar_data <- bind_rows(max, min, radar_data)
+
+radarchart(radar_data,
+           vlabels = c("Completion %", "Yards/Game", "TD/Game", "Turnovers/Game", "Bad Throws/Game", "    Throws on \n Target/Game", "Pocket Time"),
+           vlcex = 1.5, # Size of labels
+           cglwd = 2, # Grid line width
+           cglcol="black", # Grid line color
+           pcol = "black", # Polygon Outline color
+           pfcol = c(alpha("#FB4F14", 0.75), alpha("black", 0.5)), # Inside color, transparency
+           plwd = 3, # Polygon Line width
+           axistype = 2,
+           palcex = 1.5,
+           )
+
+mtext(side = 3, line = 1, at = 0, cex = 3, "Joe Burrow vs Jake Browning Evaluation Metrics", font = 2)
+
+legend(-1.75,-1,
+       legend=c("Joe Burrow","Jake Browning"),
+       pch=c(19,19),
+       col=c("black","#FB4F14"))
+```
