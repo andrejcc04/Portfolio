@@ -17,7 +17,7 @@ params:
   living_space:
     label: "Living Space Area (sqft)"
     input: text
-    value: 1609
+    value: 1600
   state:
     label: "State of Residence"
     input: text
@@ -171,7 +171,7 @@ if (params$state %in% unique(clean_data$State)) {
   
   predicted_price <- predict(model, newdata = user_input)
   
-  cat("Predicted house price: $", round(predicted_price, 2))
+  cat("Predicted price of a house in", params$state, "with", params$num_beds, "beds,", params$num_baths, "baths, and a living space of", params$living_space, "sqft: $", round(predicted_price, 2))
 } else {
   stop("Unfortunately, we do not have a record of homes in your state, thus we cannot provide a prediction on the price of your house.")
 }
