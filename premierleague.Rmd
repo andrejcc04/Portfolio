@@ -1,0 +1,330 @@
+---
+title: "Premier League Project"
+author: "Andre Contreras"
+date: "2024-06-13"
+output: 
+  prettydoc::html_pretty:
+    theme: tactile
+---
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggimage)
+library(tidyr)
+library(caret)
+
+images <- data.frame(
+  Team = c("Manchester City", "Liverpool", "Leicester City", "Chelsea", "Manchester Utd", "Arsenal", "Blackburn"),
+  Logo = c(
+    "C:/Users/ajcon/Downloads/Portfolio/Premier League Project/team_logos/Manchester-City-Logo.png",
+    "C:/Users/ajcon/Downloads/Portfolio/Premier League Project/team_logos/Liverpool-Logo.png",
+    "C:/Users/ajcon/Downloads/Portfolio/Premier League Project/team_logos/Leicester-City-Logo.png",
+    "C:/Users/ajcon/Downloads/Portfolio/Premier League Project/team_logos/Chelsea-Logo.png",
+    "C:/Users/ajcon/Downloads/Portfolio/Premier League Project/team_logos/Manchester-United-Logo.png",
+    "C:/Users/ajcon/Downloads/Portfolio/Premier League Project/team_logos/Arsenal-Logo.png",
+    "C:/Users/ajcon/Downloads/Portfolio/Premier League Project/team_logos/Blackburn-Rovers-Logo.png"
+  )
+)
+
+pldata <- read_csv("C:/Users/ajcon/Downloads/Portfolio/Premier League Project/premier-league-table.csv")
+
+winners <- pldata %>% 
+    filter(Rk == 1)
+
+winners <- left_join(winners, images, by = "Team")
+
+team_colors <- c(
+  "Manchester City" = "#6CABDD",
+  "Arsenal" = "#EF0107",
+  "Liverpool" = "#C8102E",
+  "Aston Villa" = "#95BFE5",
+  "Tottenham" = "#132257",
+  "Chelsea" = "#034694",
+  "Newcastle Utd" = "#241F20",
+  "Manchester Utd" = "#DA291C",
+  "West Ham" = "#7A263A",
+  "Crystal Palace" = "#1B458F",
+  "Brighton" = "#0057B8",
+  "Bournemouth" = "#DA291C",
+  "Fulham" = "#000000",
+  "Wolves" = "#FDB913",
+  "Everton" = "#003399",
+  "Brentford" = "#E30613",
+  "Nottingham Forest" = "#DD0000",
+  "Luton Town" = "#F78F1E",
+  "Burnley" = "#6C1D45",
+  "Sheffield Utd" = "#EE2737",
+  "Leeds United" = "#FFCD00",
+  "Leicester City" = "#003090",
+  "Southampton" = "#D71920",
+  "Norwich City" = "#00A650",
+  "Watford" = "#11210C",
+  "West Brom" = "#122F67",
+  "Cardiff City" = "#1B458F",
+  "Huddersfield" = "#0073CF",
+  "Stoke City" = "#E03A3E",
+  "Swansea City" = "#121212",
+  "Hull City" = "#F18A01",
+  "Middlesbrough" = "#E03A3E",
+  "Sunderland" = "#EB172B",
+  "QPR" = "#2C2A29",
+  "Reading" = "#0B3669",
+  "Wigan Athletic" = "#0066CC",
+  "Blackburn" = "#1C2C3B",
+  "Bolton" = "#112B54",
+  "Birmingham City" = "#003366",
+  "Blackpool" = "#EE3524",
+  "Portsmouth" = "#0034A3",
+  "Derby County" = "#0066CC",
+  "Charlton Ath" = "#EF2B2D",
+  "Ipswich Town" = "#00ADEF",
+  "Bradford City" = "#6d767a",
+  "Coventry City" = "#6BA539",
+  "Sheffield Weds" = "#0033A0",
+  "Wimbledon" = "#F58220",
+  "Barnsley" = "#EE2737",
+  "Oldham Athletic" = "#0033A0",
+  "Swindon Town" = "#EA5B0C"
+)
+
+```
+
+
+## 2024 Premier League Standings by Matchweek
+```{r echo=FALSE, fig.height=15, fig.width=35, message=FALSE, warning=FALSE}
+pl2024 <- read_csv("C:/Users/ajcon/Downloads/Portfolio/Premier League Project/premier-league-2024-standings.csv")
+
+label_data <- pl2024 %>%
+  group_by(Team) %>%
+  filter(Matchweek == max(Matchweek)) %>%
+  ungroup()
+
+ggplot(pl2024) +
+  geom_line(aes(x = Matchweek, y = Standing, col = Team), size = 1.5, show.legend = FALSE) +
+  labs(x = "Matchweek", y = "Standing", title = "2023-2024 Premier League Standings by Matchweek") +
+  geom_text(data = label_data, aes(x = Matchweek, y = Standing, label = Team, col = Team), hjust = -0.3, vjust = 0.5, show.legend = FALSE) +
+  scale_x_continuous(breaks = seq(1, 38, by = 1)) +
+  scale_y_reverse(breaks = seq(1, 20, by = 1)) +
+  scale_color_manual(values = team_colors) +
+  theme(
+    plot.title = element_text(size = 60, face = "bold"),
+    axis.title.x = element_text(size = 40),
+    axis.title.y = element_text(size = 40),
+    axis.text.x = element_text(size = 25),
+    axis.text.y = element_text(size = 25))
+```
+
+
+# History of Premier League Table
+```{r, warning=FALSE, message=FALSE, warning=FALSE, fig.height = 20, fig.width = 35, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE) # Caching it so it doesn't have to rerun when knitting. it has everything stored making it knit faster
+
+pldata <- pldata %>% 
+  filter(Rk < 21)
+
+label_data <- pldata %>% 
+    group_by(Team) %>% 
+    filter(Season_End_Year == max(Season_End_Year)) %>% 
+    ungroup()
+  
+
+# Plot of all teams
+ggplot(pldata) +
+    geom_line(aes(x = Season_End_Year, y = Rk, col = Team), size = 1.5, show.legend = FALSE, linetype = "solid") +
+    geom_text(data = label_data, aes(x = Season_End_Year, y = Rk, label = Team, col = Team), hjust = -0.3, vjust = 0.5, show.legend = FALSE) +
+    geom_image(data = winners, aes(x = Season_End_Year, y = 0.5, image = Logo), size = 0.05) + # Adjust size as needed
+    labs(x = "Year", y = "Standing", title = "History of the Premier League Table") +
+    scale_x_continuous(breaks = seq(1993, 2024, by = 1)) +
+    scale_y_reverse(breaks = seq(1, 20, by = 1)) +
+    scale_color_manual(values = team_colors) +  
+    theme(
+    plot.title = element_text(size = 75, face = "bold"),
+    axis.title.x = element_text(size = 30),
+    axis.title.y = element_text(size = 30),
+    axis.text.x = element_text(size = 15),
+    axis.text.y = element_text(size = 15)
+  )
+```
+
+#### Average Finishing Position of each club since the establishment of the Premier League (1993)
+```{r, echo=FALSE}
+plfinish <- pldata %>% 
+  group_by(Team) %>% 
+  summarise(Average_finishing_position = round(mean(Rk), 3)) %>% 
+  arrange(-desc(Average_finishing_position))
+
+plfinish
+```
+
+#### Total number of wins for each club since establishment of the Premier League
+```{r, echo=FALSE}
+plwins <- pldata %>% 
+  group_by(Team) %>% 
+  summarise(Total_Wins = sum(W)) %>% 
+  arrange(desc(Total_Wins))
+
+plwins
+```
+
+#### Total number of points for each club since the establishment of the Premier League
+```{r, echo=FALSE}
+plpoints <- pldata %>% 
+  group_by(Team) %>% 
+  summarise(Total_Points = sum(Pts)) %>% 
+  arrange(desc(Total_Points))
+
+plpoints
+```
+
+
+## Premier League Champions by the Years
+```{r, fig.width=35, fig.height=20, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE) # Caching it so it doesn't have to rerun when knitting. it has everything stored making it knit faster
+
+plchampions <- pldata %>% 
+  filter(Team %in% c("Arsenal", "Manchester City", "Manchester Utd", "Chelsea", "Liverpool", "Blackburn", "Leicester City"))
+
+plchampions <- plchampions %>% 
+  complete(Team, Season_End_Year) # USEFUL - filled in all the teams years where they weren't in the premier league bc of relegation with NA (tidyr package)
+
+label_data <- plchampions %>% 
+  group_by(Team) %>% 
+    filter(Season_End_Year == max(Season_End_Year)) %>% 
+    ungroup()
+
+label_data <- bind_rows(pldata %>% filter(Team == "Blackburn" & Season_End_Year == 2012), pldata %>% filter(Team == "Leicester City" & Season_End_Year == 2023), label_data)
+  
+# Plot of only Premier League Champions
+ggplot(plchampions) +
+    geom_line(aes(x = Season_End_Year, y = Rk, col = Team), size = 1.5, show.legend = FALSE) +
+    geom_point(aes(x = Season_End_Year, y = Rk, col = Team), size = 5, show.legend = FALSE) +
+    geom_text(data = label_data, aes(x = Season_End_Year, y = Rk, label = Team, col = Team), hjust = -0.3, vjust = 0.5, show.legend = FALSE) +
+    geom_image(data = winners, aes(x = Season_End_Year, y = 0.5, image = Logo), size = 0.05) + # Adjust size as needed
+    labs(x = "Year", y = "Standing", title = "Premier League Champions by Year") +
+    scale_x_continuous(breaks = seq(1993, 2024, by = 1)) +
+    scale_y_reverse(breaks = seq(1, 22, by = 1)) +
+    scale_color_manual(values = team_colors) +
+    theme(
+    plot.title = element_text(size = 75, face = "bold"),
+    axis.title.x = element_text(size = 30),
+    axis.title.y = element_text(size = 30),
+    axis.text.x = element_text(size = 15),
+    axis.text.y = element_text(size = 15))
+```
+
+```{r, fig.width=35, fig.height=5, echo=FALSE}
+plot.new()
+
+# Add a legend
+legend("top",    # Position of the legend (e.g., "topright", "bottomleft", etc.)
+       legend = "Indicates a team was promoted to the Premier League at the start of the season, but later relegated at the end of the season",
+       pch = 19,       # Symbol type (19 is a solid circle)
+       col = "black",  # Color of the symbol
+       cex = 3)        # Size of the symbol
+```
+
+
+
+## Premier League Big 6 by the Years
+```{r echo=FALSE, fig.height=20, fig.width=35, message=FALSE, warning=FALSE}
+
+plbigsix <- pldata %>% 
+  filter(Team %in% c("Arsenal", "Tottenham", "Manchester City", "Manchester Utd", "Chelsea", "Liverpool"))
+
+plbigsix <- plbigsix %>% 
+  complete(Team, Season_End_Year)
+
+label_data <- plbigsix %>% 
+  group_by(Team) %>% 
+    filter(Season_End_Year == max(Season_End_Year)) %>% 
+    ungroup()
+  
+# Plot of only Premier League Champions
+ggplot(plbigsix) +
+    geom_line(aes(x = Season_End_Year, y = Rk, col = Team), linewidth = 1.5, show.legend = FALSE) +
+    geom_point(aes(x = Season_End_Year, y = Rk, col = Team), size = 5, show.legend = FALSE) +
+    geom_text(data = label_data, aes(x = Season_End_Year, y = Rk, label = Team, col = Team), hjust = -0.3, vjust = 0.5, show.legend = FALSE) +
+    labs(x = "Year", y = "Standing", title = "Premier League Big 6 by Year") +
+    scale_x_continuous(breaks = seq(1993, 2024, by = 1)) +
+    scale_y_reverse(breaks = seq(1, 20, by = 1)) +
+    scale_color_manual(values = team_colors) +
+    theme(
+    plot.title = element_text(size = 75, face = "bold"),
+    axis.title.x = element_text(size = 50),
+    axis.title.y = element_text(size = 50),
+    axis.text.x = element_text(size = 25),
+    axis.text.y = element_text(size = 25))
+```
+
+```{r, fig.width=35, fig.height=5, echo=FALSE}
+plot.new()
+
+# Add a legend
+legend("top",    # Position of the legend (e.g., "topright", "bottomleft", etc.)
+       legend = "Indicates a team was promoted to the Premier League at the start of the season, but later relegated at the end of the season",
+       pch = 19,       # Symbol type (19 is a solid circle)
+       col = "black",  # Color of the symbol
+       cex = 3)        # Size of the symbol
+```
+
+
+# Model to predict Premier League Champion
+```{r, warning=FALSE, message=FALSE}
+set.seed(100)
+# Step 1: Feature Engineering
+pldata <- pldata %>%
+  select(c(1:11)) %>%
+  mutate(isChampion = ifelse(Rk == 1, 1, 0)) %>% 
+  group_by(Team) %>% 
+  mutate(Experience = sum(MP)/38) %>% 
+  ungroup() %>% 
+  filter(Experience >= 3)
+
+# Step 2: Split into 2 sets
+index <- createDataPartition(pldata$isChampion, p = 0.6, list = FALSE)
+training <- pldata[index, ]
+testing <- pldata[-index, ]
+
+# Step 3: Train Model
+model <- glm(isChampion ~ W + D + L + GF + GA + GD + Pts, data = training, family = binomial)
+
+
+# Step 4: Evaluate Model
+probability <- round(predict(model, newdata = testing, type = "response"), 3)
+
+prediction <- ifelse(probability > 0.5, 1, 0)
+
+new_pldata <- bind_cols(testing, probability, prediction)
+
+results <- data.frame("Probability To Win PL" = probability, "Prediction" = prediction, "Actual" = testing$isChampion)
+results
+
+table("Prediction" = prediction, "Actual" = testing$isChampion)
+
+# Wins plot
+ggplot(testing, aes(x = W, y = isChampion)) +
+  geom_point() +
+  geom_smooth(method = "glm", se = FALSE, method.args = list(family = binomial)) +
+  labs(y = "Probability of Winning Premier League", x = "Number of Wins", title = "Probability of becoming Champion of Premier League given Number of Wins") +
+  scale_x_continuous(breaks = seq(1, 40, by = 5), limits = c(1, 38)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1))
+
+# Points plot
+ggplot(testing, aes(x = Pts, y = isChampion)) +
+  geom_point() +
+  geom_smooth(method = "glm", se = FALSE, method.args = list(family = binomial)) +
+  labs(y = "Probability of Winning Premier League", x = "Points", title = "Probability of becoming Champion of Premier League given Points") +
+  scale_x_continuous(breaks = seq(1, 110, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1))
+
+# Goals for plot
+ggplot(testing, aes(x = GF, y = isChampion)) +
+  geom_point() +
+  geom_smooth(method = "glm", se = FALSE, method.args = list(family = binomial)) +
+  labs(y = "Probability of Winning Premier League", x = "Goals For", title = "Probability of becoming Champion of Premier League given Goals scored") +
+  scale_x_continuous(breaks = seq(1, 100, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1))
+```
+
