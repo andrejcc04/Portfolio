@@ -30,7 +30,7 @@ This project portfolio covers a diverse range of data analytics, data science, a
 ### 5. Premier League Champion Prediction with Logistic Regression
 
 - Objective: Analyze Premier League soccer data to predict future champions.
-- Approach: Employ classification modeling techniques to assess team performance and forecast league outcomes.
+- Approach: Employ classification modeling techniques to assess team performance and forecast league outcomes, analyze and visualize team progression, add images to optimize visualization techniques.
 - Techniques: Data analysis, classification modeling, visualization, insights into team performance and outcomes, feature engineering.
 - **Files:** premierleague.Rmd, Portfolio.Rmd.
 
