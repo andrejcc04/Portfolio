@@ -1,6 +1,6 @@
 This project portfolio covers a diverse range of data analytics, data science, and machine learning topics, each focusing on a different event or domain. Here's a summary of each project:
 
-(The Porttfolio.Rmd contains the integrated projoct code, the Portfolio.html and pdf are the outputs.)
+(The Portfolio.Rmd contains the integrated projoct code, the Portfolio.html and pdf are the outputs.)
 
 ## Machine Learning Models:
 ### 1. XLK Stock Price Prediction with Linear Regression
