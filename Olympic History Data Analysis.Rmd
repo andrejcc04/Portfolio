@@ -7,6 +7,10 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(dplyr)
+library(gapminder)
+library(ggplot2)
 ```
 
 # Olympics Project
@@ -21,7 +25,7 @@ Below are the results I found for the first question, along with the code I wrot
 
 ```{r, message=FALSE, echo=FALSE}
 athlete_events <- read_csv(
-   file = 'athlete_events.csv',
+   file = "C:/Users/ajcon/Downloads/Portfolio/Olympics Project/athlete_events.csv",
    col_types = cols(ID = 'i', Age = 'i', Height = 'i', Year = 'i')
 )
 
