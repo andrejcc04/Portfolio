@@ -41,7 +41,7 @@ This project portfolio covers a diverse range of data analytics, data science, a
 - Techniques: Data manipulation, data analysis, visualization using ggplot2, and statistical analysis.
 - **Files:** 2011 Masters Tournament.Rmd, Portfolio.Rmd
   
-### 7. NFL 2023 QB Performance Project
+### 7. NFL 2023 Performance Evaluation Project
 - Objective: Evaluate the performance of NFL quarterbacks during the 2023-2024 season.
 - Approach: Compiled advanced statistics of quarterbacks, developed a grading system, and identified the MVP.
 - Techniques: Data analysis, feature engineering, statistical modeling, and data visualization using ggplot2.
