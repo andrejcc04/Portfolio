@@ -58,6 +58,7 @@ This project portfolio covers a diverse range of data analytics, data science, a
 - Objective: Evaluate the investment outcomes of entrepreneurial start-up ideas to develop an understanding as to which ideas have a better chance of success
 - Approach: Gathered 3000 entries of data to clean, filter, group, and summarize the investment evaluation outcomes of each idea provided (40+ ideas), then summarize the insights using stacked bar graphs.
 - Techniques: Python, matplotlib, NumPy, pandas, data visualization, data manipulation, data cleaning, data grouping and joining.
+- **Files:** Due to confidential information, I cannot provide the data used- however the file venturecapitalism_results.png contains the final result!
 
 ## Future Projects
 - Machine Learning Classification Modelling for diognosing Alzheimers Disease
